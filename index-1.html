@@ -1,0 +1,431 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Kingshot Rally Coach v18</title>
+<style>
+:root{
+  --bg:#fafafa; --card:#ffffff; --text:#111111; --muted:#555555; --border:#cccccc; --table:#f3f3f3; --badge:#eeeeee;
+}
+body.dark{
+  --bg:#0f1115; --card:#171a21; --text:#f3f5f7; --muted:#b6bec9; --border:#303744; --table:#202634; --badge:#2b3240;
+}
+body {font-family: Arial, sans-serif; padding: 10px; color:var(--text); max-width: 1200px; margin:auto; background:var(--bg);}
+button, input, select {padding:12px; font-size:1rem; margin-top:10px; background:var(--card); color:var(--text); border:1px solid var(--border); border-radius:8px;}
+button {width:100%; cursor:pointer;}
+.card {margin-top:15px; padding:12px; border:1px solid var(--border); border-radius:8px; background:var(--card);}
+.small {font-size:0.95rem; color:var(--muted);}
+.good {font-weight:700;}
+.row {margin:6px 0;}
+textarea {width:100%; height:180px; margin-top:10px; font-family:monospace; background:var(--card); color:var(--text); border:1px solid var(--border); border-radius:8px;}
+.grid {display:grid; grid-template-columns: 1fr; gap: 10px;}
+.badge {display:inline-block; padding:3px 8px; border-radius:999px; background:var(--badge); font-size:0.9rem; margin-left:6px;}
+.table-wrap {overflow:auto; margin-top:10px;}
+table {width:100%; border-collapse:collapse; font-size:0.95rem;}
+th, td {border:1px solid var(--border); padding:8px; text-align:left; vertical-align:top;}
+th {background:var(--table);}
+.toolbar {display:grid; grid-template-columns:1fr; gap:10px;}
+@media (min-width: 900px){ .grid {grid-template-columns: 1fr 1fr;} .toolbar{grid-template-columns:1fr 1fr 1fr;} }
+label {display:block; margin-top:10px; font-weight:600;}
+.summary {line-height:1.5;}
+.progress {margin-top:8px; color:var(--text);}
+.modechip{display:inline-block;padding:4px 10px;border-radius:999px;background:var(--badge);margin-left:8px;}
+</style>
+</head>
+<body>
+
+<h2>Kingshot Rally Coach v18</h2>
+<div class="small">Batch upload, OCR cleanup, saved player profiles, mode-specific recommendations, polished alliance roster, and light/dark mode.</div>
+
+<div class="card toolbar">
+  <div>
+    <label>Theme</label>
+    <select id="themeSelect" onchange="applyTheme()">
+      <option value="light">Light</option>
+      <option value="dark">Dark</option>
+    </select>
+  </div>
+  <div>
+    <label>Recommendation mode</label>
+    <select id="modeSelect" onchange="render()">
+      <option value="general">General Rally</option>
+      <option value="bear">Bear Hunt</option>
+      <option value="defense">Defense</option>
+    </select>
+  </div>
+  <div>
+    <label>Roster sort</label>
+    <select id="sortSelect" onchange="renderRoster()">
+      <option value="name">Player name</option>
+      <option value="archers">Highest archer %</option>
+      <option value="cavalry">Highest cavalry %</option>
+      <option value="infantry">Highest infantry %</option>
+      <option value="capacity">Deployment capacity</option>
+    </select>
+  </div>
+</div>
+
+<div class="card">
+  <label>Player name</label>
+  <input id="playerName" type="text" placeholder="Example: Eric Main" style="width:100%">
+  <label>Alliance / note</label>
+  <input id="allianceName" type="text" placeholder="Example: K1234 / Main account" style="width:100%">
+  <label>Saved profiles</label>
+  <select id="profileSelect" style="width:100%"></select>
+  <button onclick="loadSelectedProfile()">Load selected profile</button>
+  <button onclick="saveCurrentProfile()">Save / update current profile</button>
+  <button onclick="deleteSelectedProfile()">Delete selected profile</button>
+</div>
+
+<div class="card">
+  <input type="file" id="img" accept="image/*" multiple><br>
+  <button onclick="runBatch()">Read Screenshots</button>
+  <div id="progress" class="progress">No screenshots processed yet.</div>
+</div>
+
+<div class="grid">
+  <div class="card" id="troops">No troop data saved yet.</div>
+  <div class="card" id="stats">No stat data saved yet.</div>
+</div>
+
+<div class="card" id="recommend">Upload troop and stat screens.</div>
+
+<div class="card">
+  <div class="good">Player card</div>
+  <div id="playerCard" class="summary">No profile loaded.</div>
+</div>
+
+<div class="card">
+  <div class="good">Alliance roster</div>
+  <div class="small">All saved profiles on this device.</div>
+  <div id="roster"></div>
+</div>
+
+<div class="card">
+  <div class="good">OCR text</div>
+  <textarea id="ocr" placeholder="OCR text will appear here for debugging."></textarea>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/tesseract.js@4/dist/tesseract.min.js"></script>
+<script>
+function cleanInt(n){ return parseInt(String(n).replace(/,/g,''),10)||0; }
+function cleanFloat(n){ return parseFloat(String(n).replace(/,/g,''))||0; }
+function cleanDisplayText(s){ return String(s||"").replace(/â€”/g, "—").replace(/â€“/g,"–"); }
+
+let storedTroops = null;
+let storedStats = null;
+
+function setProgress(msg){ document.getElementById("progress").textContent = msg; }
+
+function parseTroops(text){
+  const matches = text.match(/\d[\d,]{2,}/g) || [];
+  let nums = matches.map(n => cleanInt(n)).filter(n => n > 200 && n < 200000);
+  if(nums.length < 6) return null;
+  nums = nums.slice(0,6);
+  return { infantry: nums[0] + nums[3], cavalry: nums[1] + nums[4], archers: nums[2] + nums[5] };
+}
+
+function normalizedText(text){
+  return text.toLowerCase()
+    .replace(/[’']/g, "")
+    .replace(/â€”/g, "—")
+    .replace(/bonus\|overview/g, "bonus overview")
+    .replace(/bonus\/overview/g, "bonus overview")
+    .replace(/1m\.3/g, "111.3").replace(/1m\.2/g, "111.2").replace(/1m\.8/g, "111.8")
+    .replace(/m\.3/g, "111.3").replace(/m\.2/g, "111.2").replace(/m\.8/g, "111.8")
+    .replace(/arcer/g, "archer").replace(/attk/g, "attack").replace(/hea1th/g, "health")
+    .replace(/letha1ity/g, "lethality").replace(/defe[nm]se/g, "defense")
+    .replace(/\s+/g, " ");
+}
+
+function getPercentNearLabel(text, variants){
+  for(const label of variants){
+    const regex = new RegExp(label + "[^\\d%]{0,30}(\\d+\\.?\\d*)\\s*%","i");
+    const m = text.match(regex);
+    if(m) return cleanFloat(m[1]);
+  }
+  return 0;
+}
+
+function repairLikelyMissingLeadingOne(label, val){
+  if(val >= 20) return val;
+  if(label.includes("attack") || label.includes("health") || label.includes("lethality")){
+    if(val > 0 && val < 20) return val + 100;
+  }
+  return val;
+}
+
+function parseStats(text){
+  const t = normalizedText(text);
+  const out = {
+    squadAtk:getPercentNearLabel(t,["squads attack","squad attack"]),
+    squadDef:getPercentNearLabel(t,["squads defense","squad defense"]),
+    squadHp:getPercentNearLabel(t,["squads health","squad health"]),
+    squadLeth:getPercentNearLabel(t,["squads lethality","squad lethality"]),
+    infAtk:getPercentNearLabel(t,["infantry attack"]),
+    infDef:getPercentNearLabel(t,["infantry defense"]),
+    infHp:getPercentNearLabel(t,["infantry health"]),
+    infLeth:getPercentNearLabel(t,["infantry lethality"]),
+    cavAtk:getPercentNearLabel(t,["cavalry attack"]),
+    cavDef:getPercentNearLabel(t,["cavalry defense"]),
+    cavHp:getPercentNearLabel(t,["cavalry health"]),
+    cavLeth:getPercentNearLabel(t,["cavalry lethality"]),
+    arcAtk:getPercentNearLabel(t,["archer attack","archers attack"]),
+    arcDef:getPercentNearLabel(t,["archer defense","archers defense"]),
+    arcHp:getPercentNearLabel(t,["archer health","archers health"]),
+    arcLeth:getPercentNearLabel(t,["archer lethality","archers lethality"]),
+    deploymentCapacity:(() => { const m=t.match(/deployment capacity[^\d]{0,25}(\d[\d,]*)/i); return m?cleanInt(m[1]):0; })()
+  };
+  out.cavHp = repairLikelyMissingLeadingOne("cavalry health", out.cavHp);
+  out.cavLeth = repairLikelyMissingLeadingOne("cavalry lethality", out.cavLeth);
+  out.arcAtk = repairLikelyMissingLeadingOne("archer attack", out.arcAtk);
+  out.arcHp = repairLikelyMissingLeadingOne("archer health", out.arcHp);
+  out.infAtk = repairLikelyMissingLeadingOne("infantry attack", out.infAtk);
+  out.infHp = repairLikelyMissingLeadingOne("infantry health", out.infHp);
+  out.infLeth = repairLikelyMissingLeadingOne("infantry lethality", out.infLeth);
+  return out;
+}
+
+function isReasonableStat(val){ return typeof val === "number" && val >= 20 && val <= 250; }
+function mergeStatValue(current, incoming){
+  if(!isReasonableStat(incoming)) return current || 0;
+  if(!isReasonableStat(current)) return incoming;
+  return Math.max(current, incoming);
+}
+function mergeStats(current, incoming){
+  const merged = Object.assign({}, current || {});
+  const keys=["squadAtk","squadDef","squadHp","squadLeth","infAtk","infDef","infHp","infLeth","cavAtk","cavDef","cavHp","cavLeth","arcAtk","arcDef","arcHp","arcLeth"];
+  keys.forEach(k=> merged[k]=mergeStatValue(merged[k]||0, incoming[k]||0));
+  if((incoming.deploymentCapacity||0)>1000){ merged.deploymentCapacity=Math.max(merged.deploymentCapacity||0, incoming.deploymentCapacity||0); }
+  else { merged.deploymentCapacity = merged.deploymentCapacity || 0; }
+  return merged;
+}
+
+function statCompleteness(stats,prefix){
+  let c=0; if((stats[prefix+"Atk"]||0)>0)c++; if((stats[prefix+"Def"]||0)>0)c++; if((stats[prefix+"Hp"]||0)>0)c++; if((stats[prefix+"Leth"]||0)>0)c++; return c;
+}
+function safeStat(val,fallback){ return (typeof val==="number" && val>0)?val:fallback; }
+function unitScore(atk,def,hp,leth){ return (atk*0.35)+(hp*0.30)+(def*0.20)+(leth*0.15); }
+
+function classifyRole(comp, mode){
+  if(!comp) return "Incomplete";
+  if(mode === "bear"){
+    if(comp.archers >= 45) return "Bear damage";
+    return "Bear hybrid";
+  }
+  if(mode === "defense"){
+    if(comp.infantry >= 38) return "Frontline / tank";
+    return "Balanced defense";
+  }
+  if(comp.archers >= 40) return "Damage joiner";
+  if(comp.cavalry >= 38 && comp.infantry <= 30) return "Aggro rally";
+  if(comp.infantry >= 38) return "Frontline / tank";
+  return "Balanced rally";
+}
+
+function getModeWeights(mode){
+  if(mode === "bear"){
+    return {atk:0.45,hp:0.15,def:0.10,leth:0.30, infFloor:8};
+  }
+  if(mode === "defense"){
+    return {atk:0.20,hp:0.35,def:0.30,leth:0.15, infFloor:20};
+  }
+  return {atk:0.35,hp:0.30,def:0.20,leth:0.15, infFloor:10};
+}
+
+function unitScoreMode(atk,def,hp,leth,mode){
+  const w = getModeWeights(mode);
+  return (atk*w.atk)+(hp*w.hp)+(def*w.def)+(leth*w.leth);
+}
+
+function computeRecommendationFor(troops, stats, mode){
+  if(!troops || !stats) return {text:"Upload troop and stat screens.", composition:null};
+  const avgSquad = ((stats.squadAtk||0)+(stats.squadDef||0)+(stats.squadHp||0)+(stats.squadLeth||0))/4 || 50;
+  const infScore = unitScoreMode(safeStat(stats.infAtk,avgSquad)+(stats.squadAtk||0), safeStat(stats.infDef,avgSquad)+(stats.squadDef||0), safeStat(stats.infHp,avgSquad)+(stats.squadHp||0), safeStat(stats.infLeth,avgSquad)+(stats.squadLeth||0), mode);
+  const cavScore = unitScoreMode(safeStat(stats.cavAtk,avgSquad)+(stats.squadAtk||0), safeStat(stats.cavDef,avgSquad)+(stats.squadDef||0), safeStat(stats.cavHp,avgSquad)+(stats.squadHp||0), safeStat(stats.cavLeth,avgSquad)+(stats.squadLeth||0), mode);
+  const arcScore = unitScoreMode(safeStat(stats.arcAtk,avgSquad)+(stats.squadAtk||0), safeStat(stats.arcDef,avgSquad)+(stats.squadDef||0), safeStat(stats.arcHp,avgSquad)+(stats.squadHp||0), safeStat(stats.arcLeth,avgSquad)+(stats.squadLeth||0), mode);
+
+  const infWeighted = infScore*(troops.infantry||0), cavWeighted=cavScore*(troops.cavalry||0), arcWeighted=arcScore*(troops.archers||0);
+  const total = infWeighted+cavWeighted+arcWeighted;
+  if(total<=0) return {text:"Need more stat data.", composition:null};
+
+  let infPct=Math.round(infWeighted/total*100), cavPct=Math.round(cavWeighted/total*100), arcPct=Math.round(arcWeighted/total*100);
+  const infFloor = getModeWeights(mode).infFloor;
+  if(infPct < infFloor){
+    const deficit = infFloor - infPct; infPct = infFloor;
+    if(arcPct >= cavPct) arcPct = Math.max(0, arcPct-deficit); else cavPct = Math.max(0, cavPct-deficit);
+  }
+  let sum = infPct+cavPct+arcPct; if(sum!==100) arcPct += (100-sum);
+
+  let strongest="Infantry", strongestScore=infScore;
+  if(cavScore>strongestScore){ strongest="Cavalry"; strongestScore=cavScore; }
+  if(arcScore>strongestScore){ strongest="Archers"; strongestScore=arcScore; }
+
+  const composition={infantry:infPct,cavalry:cavPct,archers:arcPct,strongest,mode};
+  const role = classifyRole(composition, mode);
+  return {
+    text:`<div class="good">Recommended rally composition <span class="modechip">${mode === "general" ? "General Rally" : mode === "bear" ? "Bear Hunt" : "Defense"}</span></div>
+      <div class="row">Infantry: <b>${infPct}%</b></div>
+      <div class="row">Cavalry: <b>${cavPct}%</b></div>
+      <div class="row">Archers: <b>${arcPct}%</b></div>
+      <br><div class="good">Reason</div>
+      <div>${strongest} have your highest effective stat profile after combining troop-specific bonuses with squad bonuses.</div>
+      <div class="row"><span class="badge">${role}</span></div>`,
+    composition
+  };
+}
+
+function currentMode(){ return document.getElementById("modeSelect").value; }
+function computeRecommendation(){ return computeRecommendationFor(storedTroops, storedStats, currentMode()); }
+
+function getProfiles(){ try{return JSON.parse(localStorage.getItem("kingshot_profiles")||"[]")}catch(e){return []} }
+function setProfiles(profiles){ localStorage.setItem("kingshot_profiles", JSON.stringify(profiles)); }
+function refreshProfileList(){
+  const profiles=getProfiles(), sel=document.getElementById("profileSelect"); sel.innerHTML="";
+  if(!profiles.length){ const opt=document.createElement("option"); opt.value=""; opt.textContent="No saved profiles"; sel.appendChild(opt); return; }
+  profiles.forEach((p,idx)=>{ const opt=document.createElement("option"); opt.value=String(idx); opt.textContent=`${p.playerName||"Unnamed"}${p.allianceName?" — "+p.allianceName:""}`; sel.appendChild(opt); });
+}
+function buildCurrentProfileObject(){
+  const general = computeRecommendationFor(storedTroops, storedStats, "general").composition;
+  const bear = computeRecommendationFor(storedTroops, storedStats, "bear").composition;
+  const defense = computeRecommendationFor(storedTroops, storedStats, "defense").composition;
+  return {
+    playerName:document.getElementById("playerName").value.trim(),
+    allianceName:document.getElementById("allianceName").value.trim(),
+    troops:storedTroops, stats:storedStats,
+    recommendation: general, bearRecommendation: bear, defenseRecommendation: defense,
+    updatedAt:new Date().toISOString()
+  };
+}
+function saveCurrentProfile(){
+  const playerName=document.getElementById("playerName").value.trim(); if(!playerName){ alert("Enter a player name first."); return; }
+  const profiles=getProfiles(), profile=buildCurrentProfileObject();
+  const i=profiles.findIndex(p=>(p.playerName||"").toLowerCase()===playerName.toLowerCase());
+  if(i>=0) profiles[i]=profile; else profiles.push(profile);
+  setProfiles(profiles); refreshProfileList(); renderRoster(); renderPlayerCard();
+}
+function loadSelectedProfile(){
+  const profiles=getProfiles(), idx=parseInt(document.getElementById("profileSelect").value,10); if(isNaN(idx)||!profiles[idx]) return;
+  const p=profiles[idx];
+  document.getElementById("playerName").value=p.playerName||""; document.getElementById("allianceName").value=p.allianceName||"";
+  storedTroops=p.troops||null; storedStats=p.stats||null; render();
+}
+function deleteSelectedProfile(){
+  const profiles=getProfiles(), idx=parseInt(document.getElementById("profileSelect").value,10); if(isNaN(idx)||!profiles[idx]) return;
+  profiles.splice(idx,1); setProfiles(profiles); refreshProfileList(); renderRoster();
+}
+
+function renderPlayerCard(){
+  const rec=computeRecommendation();
+  const playerName=cleanDisplayText(document.getElementById("playerName").value.trim()||"Unnamed");
+  const allianceName=cleanDisplayText(document.getElementById("allianceName").value.trim()||"");
+  let html=`<div><b>${playerName}</b>${allianceName?" — "+allianceName:""}</div>`;
+  if(storedTroops) html += `<div class="row">Troops: Inf ${storedTroops.infantry} | Cav ${storedTroops.cavalry} | Arc ${storedTroops.archers}</div>`;
+  if(storedStats){
+    html += `<div class="row">Key stats:</div>
+      <div class="row">Inf ${storedStats.infAtk||0}/${storedStats.infDef||0}/${storedStats.infHp||0}/${storedStats.infLeth||0} <span class="badge">${statCompleteness(storedStats,"inf")}/4</span></div>
+      <div class="row">Cav ${storedStats.cavAtk||0}/${storedStats.cavDef||0}/${storedStats.cavHp||0}/${storedStats.cavLeth||0} <span class="badge">${statCompleteness(storedStats,"cav")}/4</span></div>
+      <div class="row">Arc ${storedStats.arcAtk||0}/${storedStats.arcDef||0}/${storedStats.arcHp||0}/${storedStats.arcLeth||0} <span class="badge">${statCompleteness(storedStats,"arc")}/4</span></div>`;
+    if(storedStats.deploymentCapacity) html += `<div class="row">Deployment capacity: ${storedStats.deploymentCapacity}</div>`;
+  }
+  if(rec.composition){
+    html += `<div class="row"><b>${currentMode()==="general"?"General":currentMode()==="bear"?"Bear":"Defense"}:</b> Inf ${rec.composition.infantry}% | Cav ${rec.composition.cavalry}% | Arc ${rec.composition.archers}%</div>`;
+    html += `<div class="row"><span class="badge">${classifyRole(rec.composition, currentMode())}</span></div>`;
+  }
+  document.getElementById("playerCard").innerHTML=html;
+}
+
+function renderRoster(){
+  const profiles = getProfiles(), container = document.getElementById("roster");
+  if(!profiles.length){ container.innerHTML="No saved profiles yet."; return; }
+  const sortBy = document.getElementById("sortSelect").value;
+  const mode = currentMode();
+  const rows = profiles.map(p=>{
+    const rec = mode==="bear" ? p.bearRecommendation : mode==="defense" ? p.defenseRecommendation : p.recommendation;
+    return {
+      p, rec,
+      infC: statCompleteness(p.stats||{}, "inf"),
+      cavC: statCompleteness(p.stats||{}, "cav"),
+      arcC: statCompleteness(p.stats||{}, "arc"),
+      cap: (p.stats||{}).deploymentCapacity || 0
+    };
+  });
+
+  rows.sort((a,b)=>{
+    if(sortBy==="archers") return (b.rec?.archers||0)-(a.rec?.archers||0);
+    if(sortBy==="cavalry") return (b.rec?.cavalry||0)-(a.rec?.cavalry||0);
+    if(sortBy==="infantry") return (b.rec?.infantry||0)-(a.rec?.infantry||0);
+    if(sortBy==="capacity") return (b.cap||0)-(a.cap||0);
+    return cleanDisplayText(a.p.playerName||"").localeCompare(cleanDisplayText(b.p.playerName||""));
+  });
+
+  let html=`<div class="table-wrap"><table><thead><tr>
+    <th>Player</th><th>Alliance</th><th>Strongest</th><th>Troops</th><th>Completeness</th><th>Recommended</th><th>Capacity</th><th>Role</th>
+  </tr></thead><tbody>`;
+  rows.forEach(({p,rec,infC,cavC,arcC,cap})=>{
+    html += `<tr>
+      <td>${cleanDisplayText(p.playerName||"Unnamed")}</td>
+      <td>${cleanDisplayText(p.allianceName||"")}</td>
+      <td>${rec?.strongest || "Incomplete"}</td>
+      <td>Inf ${p.troops?.infantry||0}<br>Cav ${p.troops?.cavalry||0}<br>Arc ${p.troops?.archers||0}</td>
+      <td>Inf ${infC}/4<br>Cav ${cavC}/4<br>Arc ${arcC}/4</td>
+      <td>${rec ? `Inf ${rec.infantry}%<br>Cav ${rec.cavalry}%<br>Arc ${rec.archers}%` : "Incomplete"}</td>
+      <td>${cap || ""}</td>
+      <td>${rec ? classifyRole(rec, mode) : "Incomplete"}</td>
+    </tr>`;
+  });
+  html += `</tbody></table></div>`;
+  container.innerHTML = html;
+}
+
+function applyTheme(){
+  const theme = document.getElementById("themeSelect").value;
+  document.body.classList.toggle("dark", theme === "dark");
+  localStorage.setItem("kingshot_theme", theme);
+}
+function initTheme(){
+  const saved = localStorage.getItem("kingshot_theme") || "light";
+  document.getElementById("themeSelect").value = saved;
+  applyTheme();
+}
+
+function render(){
+  if(storedTroops){
+    document.getElementById("troops").innerHTML=`<div class="good">Troops saved</div>
+      <div class="row">Infantry: ${storedTroops.infantry}</div><div class="row">Cavalry: ${storedTroops.cavalry}</div><div class="row">Archers: ${storedTroops.archers}</div>`;
+  } else document.getElementById("troops").innerHTML="No troop data saved yet.";
+
+  if(storedStats){
+    document.getElementById("stats").innerHTML=`<div class="good">Stats saved</div>
+      <div class="row">Inf Atk: ${storedStats.infAtk||0}% | Inf Def: ${storedStats.infDef||0}% | Inf Hp: ${storedStats.infHp||0}% | Inf Leth: ${storedStats.infLeth||0}%</div>
+      <div class="row">Cav Atk: ${storedStats.cavAtk||0}% | Cav Def: ${storedStats.cavDef||0}% | Cav Hp: ${storedStats.cavHp||0}% | Cav Leth: ${storedStats.cavLeth||0}%</div>
+      <div class="row">Arc Atk: ${storedStats.arcAtk||0}% | Arc Def: ${storedStats.arcDef||0}% | Arc Hp: ${storedStats.arcHp||0}% | Arc Leth: ${storedStats.arcLeth||0}%</div>`;
+  } else document.getElementById("stats").innerHTML="No stat data saved yet.";
+
+  document.getElementById("recommend").innerHTML = computeRecommendation().text;
+  renderPlayerCard(); renderRoster();
+}
+
+async function runBatch(){
+  const files = Array.from(document.getElementById("img").files || []);
+  if(!files.length){ alert("Upload at least one image"); return; }
+  document.getElementById("ocr").value=""; setProgress(`Processing ${files.length} screenshot(s)...`);
+  files.sort((a,b)=>b.size-a.size);
+  for(let i=0;i<files.length;i++){
+    const f=files[i]; setProgress(`Reading ${i+1} of ${files.length}: ${f.name}`);
+    const res = await Tesseract.recognize(f,'eng');
+    const lower = (res.data.text||"").toLowerCase();
+    document.getElementById("ocr").value += `\n--- ${f.name} ---\n${lower}\n`;
+    const t = parseTroops(lower); if(t) storedTroops=t;
+    storedStats = mergeStats(storedStats, parseStats(lower));
+    render();
+  }
+  setProgress(`Done. Processed ${files.length} screenshot(s).`);
+}
+
+refreshProfileList();
+initTheme();
+render();
+</script>
+</body>
+</html>
