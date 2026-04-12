@@ -624,10 +624,11 @@ async function ocrCanvas(canvas, whitelist = "") {
     const img = await loadImageFromFile(file);
 
     // Crop 1: name bar
-    const nameCanvas = cropCanvas(img, 0.34, 0.67, 0.56, 0.07);
+    const nameCanvas = cropCanvas(img, 0.30, 0.655, 0.62, 0.085);
 
     // Crop 2: info block with ID, power, kills, alliance, kingdom
-    const statsCanvas = cropCanvas(img, 0.42, 0.73, 0.44, 0.18);
+    const statsCanvas = cropCanvas(img, 0.38, 0.72, 0.50, 0.21);
+
 
     const nameText = await ocrCanvas(
       nameCanvas,
