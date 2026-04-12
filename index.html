@@ -537,81 +537,56 @@ function getTroopFamily(name) {
 
   const troop_rows = [];
 
-  function splitTroopNames(line) {
-  const cleanedLine = String(line || "")
-    .replace(/[^A-Za-z0-9 \-]/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
+  function extractTroopNamesFromLine(line) {
+    const families = ["Infantry", "Cavalry", "Archer", "Archers", "Lancer", "Marksman"];
+    const words = line.split(/\s+/).filter(Boolean);
 
-  const familyWords = "(?:Infantry|Cavalry|Archer|Archers|Lancer|Marksman)";
-  const regex = new RegExp(`([A-Za-z]+(?:\\s+[A-Za-z]+){0,3}\\s+${familyWords})`, "gi");
+    const names = [];
+    let current = [];
 
-  const matches = [...cleanedLine.matchAll(regex)].map(m => m[1].trim());
+    for (const word of words) {
+      current.push(word);
 
-  return matches.map(name =>
-    name
-      .replace(/^[A-Za-z]\s+/, "")   // strip stray single-letter prefix
-      .replace(/\b(?:y|g|h)\s+/i, "") // strip common OCR junk
-      .trim()
-  );
-}
-
-  function extractCounts(line, expectedCount) {
-    let nums = (line.match(/\d[\d,]*/g) || []).map(cleanInt).filter(n => n > 0);
-
-    // Common OCR noise: icon marker creates tiny numbers like 2 between real troop counts
-    // If we have extra numbers, drop tiny noise first.
-    if (nums.length > expectedCount) {
-      const bigNums = nums.filter(n => n >= 10);
-      if (bigNums.length >= expectedCount) nums = bigNums;
+      if (families.some(f => f.toLowerCase() === word.toLowerCase())) {
+        names.push(current.join(" ").replace(/^[A-Za-z]\s+/, "").trim());
+        current = [];
+      }
     }
 
-    // If still too many, keep the first N in left-to-right order
-    if (nums.length > expectedCount) {
-      nums = nums.slice(0, expectedCount);
+    return names;
+  }
+
+  function extractCounts(line) {
+    return (line.match(/\d[\d,]*/g) || [])
+      .map(cleanInt)
+      .filter(n => n >= 10); // ignore tiny junk like 2
+  }
+
+  for (let i = 0; i < lines.length - 1; i++) {
+    const nameLine = lines[i];
+    const countLine = lines[i + 1];
+
+    const names = extractTroopNamesFromLine(nameLine);
+    const counts = extractCounts(countLine);
+
+    if (!names.length || !counts.length) continue;
+
+    const pairCount = Math.min(names.length, counts.length, 2);
+
+    for (let n = 0; n < pairCount; n++) {
+      const rawName = names[n];
+      const family = getTroopFamily(rawName);
+      const count = counts[n];
+
+      if (family === "unknown" || !count) continue;
+
+      troop_rows.push({
+        raw_name: rawName,
+        family,
+        count
+      });
     }
-
-    return nums;
   }
-
-  for (let i = 0; i < lines.length; i++) {
-  const nameLine = lines[i];
-  let names = splitTroopNames(nameLine);
-
-  if (!names.length) continue;
-
-  let counts = [];
-  if (i + 1 < lines.length) {
-    counts = extractCounts(lines[i + 1], names.length);
-  }
-
-  // fallback: sometimes counts land on same line
-  if (!counts.length) {
-    counts = extractCounts(nameLine, names.length);
-  }
-
-  // extra fallback: if OCR merged rows weirdly, look one more line down
-  if (counts.length < names.length && i + 2 < lines.length) {
-    const moreCounts = extractCounts(lines[i + 2], names.length);
-    if (moreCounts.length >= names.length) {
-      counts = moreCounts.slice(0, names.length);
-    }
-  }
-
-  for (let n = 0; n < names.length; n++) {
-    const rawName = names[n];
-    const family = getTroopFamily(rawName);
-    const count = counts[n] || 0;
-
-    if (family === "unknown" || !count) continue;
-
-    troop_rows.push({
-      raw_name: rawName,
-      family,
-      count
-    });
-  }
-}
 
   // Deduplicate exact duplicates
   const seen = new Set();
