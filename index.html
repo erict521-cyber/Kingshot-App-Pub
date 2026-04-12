@@ -380,13 +380,13 @@ function parseIdentityTextV2(nameText, statsText) {
     }
   }
 
-  // fallback: sometimes OCR misses the first letter/label but the number is still there
+  // Fallback: any M-value in the stats block
   if (!powerRaw) {
     const m = rawStats.match(/(\d+(?:\.\d+)?)\s*M/i);
     if (m) powerRaw = `${m[1]}M`;
   }
 
-  // repair common OCR decimal-loss cases
+  // Repair common OCR decimal-loss cases
   if (powerRaw && /^[0-9]{3,4}M$/i.test(powerRaw) && !powerRaw.includes(".")) {
     const digits = powerRaw.replace(/M/i, "");
     if (digits.length === 3) {
@@ -396,7 +396,7 @@ function parseIdentityTextV2(nameText, statsText) {
     }
   }
 
-  // 6) Name: prefer stats crop, ignore useless name crop unless needed
+  // 6) Name
   let candidateName = null;
 
   for (const line of lines) {
@@ -412,14 +412,14 @@ function parseIdentityTextV2(nameText, statsText) {
     }
   }
 
-  // only use the name crop if stats crop gave nothing
+  // fallback to name crop
   if (!candidateName) {
     const nameLines = rawName
       .split(/\n+/)
       .map(s => s.trim())
       .filter(Boolean)
       .map(s => s.replace(/[^A-Za-z0-9\[\]_-]/g, "").trim())
-      .filter(s => s.length >= 4);
+      .filter(s => s.length >= 3);
 
     candidateName = nameLines[0] || "";
   }
@@ -428,44 +428,31 @@ function parseIdentityTextV2(nameText, statsText) {
     .replace(/[^A-Za-z0-9\[\]_-]/g, "")
     .trim();
 
-  // Fix missing opening bracket
-  if (!candidateName.startsWith("[") && candidateName.includes("]")) {
-    candidateName = "[" + candidateName;
-  }
+  // Remove trailing OCR junk
+  candidateName = candidateName.replace(/[KkEe]+$/, "");
 
-  // Remove alliance tag from front of name
-  // [ONE]TitsThisWay -> TitsThisWay
+  // Case 1: [TAG]Name -> Name
   let tagMatch = candidateName.match(/^\[([A-Za-z0-9_-]+)\](.+)$/);
   if (tagMatch) {
-    let tag = tagMatch[1];
-    let rest = tagMatch[2];
-
-    // OCR sometimes duplicates the last alliance letter into the player name
-    // [AlllAglaia -> tag=Alll, rest=Aglaia
-    if (alliance && tag.toLowerCase().startsWith(alliance.toLowerCase())) {
-      tag = alliance;
-    }
-
-    // if the remainder starts with the last alliance letter repeated, drop it
-    if (alliance) {
-      const last = alliance.slice(-1);
-      const doubled = new RegExp("^" + last + "(?=[A-Z])");
-      rest = rest.replace(doubled, "");
-    }
-
-    candidateName = rest;
+    candidateName = tagMatch[2];
   }
 
-  // Also handle loose tag form: ONE]TitsThisWay -> TitsThisWay
+  // Case 2: TAG]Name -> Name
   let looseTagMatch = candidateName.match(/^([A-Za-z0-9_-]+)\](.+)$/);
   if (looseTagMatch) {
     candidateName = looseTagMatch[2];
   }
 
-  // Trim obvious trailing OCR junk
-  candidateName = candidateName.replace(/[KkEe]+$/, "");
+  // Case 3: [AllAglaia -> Aglaia
+  if (alliance) {
+    const malformedTag = new RegExp("^\\[" + alliance + "(.+)$", "i");
+    const m = candidateName.match(malformedTag);
+    if (m && m[1]) {
+      candidateName = m[1];
+    }
+  }
 
-  // Fix leading stray OCR letter before a capitalized name: lAglaia -> Aglaia
+  // Fix leading stray OCR letter before capitalized name
   if (/^[lI](?=[A-Z])/.test(candidateName)) {
     candidateName = candidateName.slice(1);
   }
