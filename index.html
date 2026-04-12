@@ -388,15 +388,17 @@ function parseIdentityTextV2(nameText, statsText) {
   let candidateName = null;
 
   for (const line of lines) {
-    if (
-      /\]/.test(line) &&
-      !/Alliance|liance|Kingdom|Kills|lls|ID/i.test(line) &&
-      !/\d{6,12}/.test(line)
-    ) {
-      candidateName = line;
+  if (
+    !/Alliance|liance|Kingdom|ngdom|Kills|lls|ID/i.test(line) &&
+    !/\d{6,12}/.test(line)
+  ) {
+    const cleaned = line.replace(/[^A-Za-z0-9\[\]_-]/g, "").trim();
+    if (cleaned.length >= 4 && /[A-Za-z]/.test(cleaned)) {
+      candidateName = cleaned;
       break;
     }
   }
+}
 
   if (!candidateName) {
     const nameLines = String(rawName || "")
