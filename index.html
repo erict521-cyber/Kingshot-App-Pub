@@ -539,34 +539,60 @@ function getTroopFamily(name) {
 
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
-    const family = getTroopFamily(line);
 
+    // Find a line that looks like a troop label
+    const family = getTroopFamily(line);
     if (family === "unknown") continue;
 
+    let rawName = line;
     let count = 0;
 
-    // same-line count
-    let sameLine = line.match(/(\d[\d,]*)$/);
-    if (sameLine) {
-      count = cleanInt(sameLine[1]);
+    // Case 1: same line, e.g. "Supreme Infantry 77,761"
+    let sameLineMatch = line.match(/(.+?)\s+(\d[\d,]*)$/);
+    if (sameLineMatch) {
+      rawName = sameLineMatch[1].trim();
+      count = cleanInt(sameLineMatch[2]);
     }
 
-    // next-line count fallback
+    // Case 2: next line is just the number
     if (!count && i + 1 < lines.length) {
-      let nextLine = lines[i + 1].match(/^(\d[\d,]*)$/);
-      if (nextLine) {
-        count = cleanInt(nextLine[1]);
+      const next = lines[i + 1];
+      const nextMatch = next.match(/^(\d[\d,]*)$/);
+      if (nextMatch) {
+        count = cleanInt(nextMatch[1]);
+      }
+    }
+
+    // Case 3: OCR split weirdly, number may be in next 2 lines
+    if (!count) {
+      for (let j = i + 1; j <= Math.min(i + 2, lines.length - 1); j++) {
+        const m = lines[j].match(/(\d[\d,]*)/);
+        if (m) {
+          count = cleanInt(m[1]);
+          break;
+        }
       }
     }
 
     if (!count) continue;
 
+    rawName = rawName.replace(/[^A-Za-z0-9 \-_]/g, "").trim();
+
     troop_rows.push({
-      raw_name: line.replace(/\d[\d,]*$/, "").trim(),
+      raw_name: rawName,
       family,
       count
     });
   }
+
+  // Deduplicate identical row name + count pairs
+  const seen = new Set();
+  const deduped_rows = troop_rows.filter(row => {
+    const key = `${row.raw_name}|${row.family}|${row.count}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
 
   const troop_totals = {
     infantry: 0,
@@ -575,11 +601,11 @@ function getTroopFamily(name) {
     total: 0
   };
 
-  troop_rows.forEach(row => {
+  for (const row of deduped_rows) {
     if (troop_totals[row.family] !== undefined) {
       troop_totals[row.family] += row.count;
     }
-  });
+  }
 
   troop_totals.total =
     troop_totals.infantry +
@@ -588,25 +614,26 @@ function getTroopFamily(name) {
 
   const rec = {
     screen_type: "troops_preview",
-    troop_rows,
+    troop_rows: deduped_rows,
     troop_totals,
     captured_at: nowIso(),
     confidence: {
-      overall: troop_rows.length ? 0.94 : 0.0
+      overall: deduped_rows.length ? 0.94 : 0.0
     },
     review_flags: []
   };
 
-  if (!troop_rows.length) rec.review_flags.push("No troop rows detected");
+  if (!deduped_rows.length) rec.review_flags.push("No troop rows detected");
   if (!troop_totals.infantry) rec.review_flags.push("No infantry rows detected");
   if (!troop_totals.cavalry) rec.review_flags.push("No cavalry rows detected");
   if (!troop_totals.archers) rec.review_flags.push("No archer rows detected");
 
-  if (rec.review_flags.length) rec.confidence.overall = 0.72;
+  if (rec.review_flags.length) {
+    rec.confidence.overall = 0.72;
+  }
 
   return rec;
 }
-
 async function loadImageFromFile(file) {
   return new Promise((resolve, reject) => {
     const img = new Image();
