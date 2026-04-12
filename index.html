@@ -369,14 +369,32 @@ function parseIdentityTextV2(nameText, statsText) {
     }
   }
 
-// Prefer the first standalone K/M value that is NOT on a kills line
+// 5) Power: prefer a line that looks like a power line, not just any M/K value
+let powerRaw = null;
+
 for (const line of lines) {
   if (/Kills|lls/i.test(line)) continue;
 
-  const m = line.match(/(\d+(?:\.\d+)?)\s*([MK])/i);
+  const cleanedLine = line.replace(/\s+/g, "");
+  const m = cleanedLine.match(/(\d+(?:\.\d+)?)([MK])/i);
   if (m) {
     powerRaw = `${m[1]}${m[2].toUpperCase()}`;
     break;
+  }
+}
+
+// repair common OCR decimal-loss cases for power
+// examples:
+// 422M  -> 42.2M
+// 4202M -> 40.2M
+// only do this for suspiciously huge "M" values with no decimal
+if (powerRaw && /^[0-9]+M$/i.test(powerRaw)) {
+  const digits = powerRaw.replace(/M/i, "");
+
+  if (digits.length === 3) {
+    powerRaw = `${digits.slice(0,2)}.${digits.slice(2)}M`;
+  } else if (digits.length === 4) {
+    powerRaw = `${digits.slice(0,2)}.${digits.slice(2,3)}M`;
   }
 }
   // 6) Name: use stats crop first, fallback to name crop
