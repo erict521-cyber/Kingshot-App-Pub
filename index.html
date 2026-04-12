@@ -536,10 +536,18 @@ function getTroopFamily(name) {
     .filter(Boolean);
 
   const troop_rows = [];
+  const familyWords = ["Infantry", "Cavalry", "Archer", "Archers", "Lancer", "Marksman"];
+
+  function cleanNameLine(line) {
+    return String(line || "")
+      .replace(/[^A-Za-z0-9 \-]/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+  }
 
   function extractTroopNamesFromLine(line) {
-    const families = ["Infantry", "Cavalry", "Archer", "Archers", "Lancer", "Marksman"];
-    const words = line.split(/\s+/).filter(Boolean);
+    const cleaned = cleanNameLine(line);
+    const words = cleaned.split(/\s+/).filter(Boolean);
 
     const names = [];
     let current = [];
@@ -547,8 +555,13 @@ function getTroopFamily(name) {
     for (const word of words) {
       current.push(word);
 
-      if (families.some(f => f.toLowerCase() === word.toLowerCase())) {
-        names.push(current.join(" ").replace(/^[A-Za-z]\s+/, "").trim());
+      if (familyWords.some(f => f.toLowerCase() === word.toLowerCase())) {
+        let name = current.join(" ").trim();
+
+        // remove stray leading one-letter OCR junk
+        name = name.replace(/^[A-Za-z]\s+/, "").trim();
+
+        names.push(name);
         current = [];
       }
     }
@@ -557,9 +570,9 @@ function getTroopFamily(name) {
   }
 
   function extractCounts(line) {
-    return (line.match(/\d[\d,]*/g) || [])
+    return (String(line || "").match(/\d[\d,]*/g) || [])
       .map(cleanInt)
-      .filter(n => n >= 10); // ignore tiny junk like 2
+      .filter(n => n >= 10); // ignore junk like 2
   }
 
   for (let i = 0; i < lines.length - 1; i++) {
@@ -571,6 +584,7 @@ function getTroopFamily(name) {
 
     if (!names.length || !counts.length) continue;
 
+    // We only expect max 2 troop names per visible row
     const pairCount = Math.min(names.length, counts.length, 2);
 
     for (let n = 0; n < pairCount; n++) {
