@@ -412,6 +412,14 @@ function parseIdentityTextV2(nameText, statsText) {
     .replace(/[^A-Za-z0-9\[\]_-]/g, "")
     .trim();
 
+// trim obvious trailing OCR junk
+candidateName = candidateName.replace(/[Kk]+$/, "");
+
+// reject names that are mostly garbage
+if (candidateName && candidateName.length < 4) {
+  candidateName = "";
+}
+
   // repair missing opening bracket
   // "ONE]thallay" -> "[ONE]thallay"
   if (!candidateName.startsWith("[") && candidateName.includes("]")) {
