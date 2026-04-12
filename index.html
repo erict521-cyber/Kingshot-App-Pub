@@ -678,16 +678,18 @@ function parseGovernorText(text) {
 
       let value = null;
 
-      if (labelNorm === "win ratio" ||
-          labelNorm.includes("attack") ||
-          labelNorm.includes("defense") ||
-          labelNorm.includes("health") ||
-          labelNorm.includes("lethality") ||
-          labelNorm.includes("speed")) {
+      const isPercentStat =
+        labelNorm === "win ratio" ||
+        labelNorm.includes("attack") ||
+        labelNorm.includes("defense") ||
+        labelNorm.includes("health") ||
+        labelNorm.includes("lethality") ||
+        labelNorm.includes("speed");
+
+      if (isPercentStat) {
         value = parsePercentValue(line);
       } else {
-        const nums = line.match(/\d[\d,]*/g) || [];
-        if (nums.length) value = cleanInt(nums[nums.length - 1]);
+        value = parseBigNumberValue(line);
       }
 
       if (value !== null && value !== undefined) {
