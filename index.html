@@ -419,6 +419,16 @@ if (candidateName && candidateName.length < 4) {
   candidateName = "";
 }
 
+// fallback: try to recover a tagged name directly from stats text
+if (!candidateName) {
+  const m =
+    rawStats.match(/(\[[A-Za-z]+\][A-Za-z0-9_-]+)/) ||
+    rawStats.match(/([A-Za-z]+\][A-Za-z0-9_-]+)/);
+
+  if (m) {
+    candidateName = m[1];
+  }
+}
   // repair missing opening bracket
   // "ONE]thallay" -> "[ONE]thallay"
   if (!candidateName.startsWith("[") && candidateName.includes("]")) {
