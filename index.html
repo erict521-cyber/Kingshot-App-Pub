@@ -431,16 +431,24 @@ function parseIdentityTextV2(nameText, statsText) {
     if (m) candidateName = m[1];
   }
 
-  candidateName = String(candidateName || "")
+candidateName = String(candidateName || "")
     .replace(/[^A-Za-z0-9\[\]_-]/g, "")
     .trim();
 
-  // repair missing opening bracket
+  // If OCR found "ONE]thallay" -> "[ONE]thallay"
   if (!candidateName.startsWith("[") && candidateName.includes("]")) {
     candidateName = "[" + candidateName;
   }
 
-  // repair missing closing bracket
+  // If OCR found "ONEisThsWay" and alliance is known -> "[ONE]isThsWay"
+  if (alliance && candidateName && !candidateName.startsWith("[")) {
+    const startsWithAlliance = new RegExp("^" + alliance, "i");
+    if (startsWithAlliance.test(candidateName)) {
+      candidateName = "[" + alliance + "]" + candidateName.slice(alliance.length);
+    }
+  }
+
+  // Fix missing closing bracket
   if (
     alliance &&
     candidateName &&
@@ -450,19 +458,14 @@ function parseIdentityTextV2(nameText, statsText) {
     candidateName = candidateName.replace("[" + alliance, "[" + alliance + "]");
   }
 
-  // trim trailing junk like K
-  candidateName = candidateName.replace(/[Kk]+$/, "");
-
-  if (candidateName.length >= 4) {
-    playerName = candidateName;
+  // Remove obvious leading junk after the alliance tag
+  if (alliance) {
+    const strayLowerAfterTag = new RegExp("^\\[" + alliance + "\\][lI]([A-Z])");
+    candidateName = candidateName.replace(strayLowerAfterTag, "[" + alliance + "]$1");
   }
 
-// fix stray OCR letter after alliance tag
-// example: [All]lAglaia -> [All]Aglaia
-if (alliance) {
-  const strayTag = new RegExp("^\\[" + alliance + "\\]l([A-Z])");
-  candidateName = candidateName.replace(strayTag, "[" + alliance + "]$1");
-}
+  // Trim obvious trailing junk
+  candidateName = candidateName.replace(/[EKek]+$/, "");
 
   const rec = {
     screen_type: "player_identity",
