@@ -575,35 +575,43 @@ function getTroopFamily(name) {
   }
 
   for (let i = 0; i < lines.length; i++) {
-    const nameLine = lines[i];
-    const names = splitTroopNames(nameLine);
+  const nameLine = lines[i];
+  let names = splitTroopNames(nameLine);
 
-    if (!names.length) continue;
+  if (!names.length) continue;
 
-    let counts = [];
-    if (i + 1 < lines.length) {
-      counts = extractCounts(lines[i + 1], names.length);
-    }
+  let counts = [];
+  if (i + 1 < lines.length) {
+    counts = extractCounts(lines[i + 1], names.length);
+  }
 
-    // fallback: sometimes counts land on same line
-    if (!counts.length) {
-      counts = extractCounts(nameLine, names.length);
-    }
+  // fallback: sometimes counts land on same line
+  if (!counts.length) {
+    counts = extractCounts(nameLine, names.length);
+  }
 
-    for (let n = 0; n < names.length; n++) {
-      const rawName = names[n];
-      const family = getTroopFamily(rawName);
-      const count = counts[n] || 0;
-
-      if (family === "unknown" || !count) continue;
-
-      troop_rows.push({
-        raw_name: rawName,
-        family,
-        count
-      });
+  // extra fallback: if OCR merged rows weirdly, look one more line down
+  if (counts.length < names.length && i + 2 < lines.length) {
+    const moreCounts = extractCounts(lines[i + 2], names.length);
+    if (moreCounts.length >= names.length) {
+      counts = moreCounts.slice(0, names.length);
     }
   }
+
+  for (let n = 0; n < names.length; n++) {
+    const rawName = names[n];
+    const family = getTroopFamily(rawName);
+    const count = counts[n] || 0;
+
+    if (family === "unknown" || !count) continue;
+
+    troop_rows.push({
+      raw_name: rawName,
+      family,
+      count
+    });
+  }
+}
 
   // Deduplicate exact duplicates
   const seen = new Set();
