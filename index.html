@@ -756,17 +756,27 @@ const statsCanvas = cropCanvas(img, 0.33, 0.70, 0.56, 0.23);
 
     const img = await loadImageFromFile(file);
 
-    // Focus on troop list area
+    // full troop list area
     const troopCanvas = cropCanvas(img, 0.10, 0.18, 0.80, 0.58);
 
-    const text = await ocrCanvas(
-      troopCanvas,
+    // split into left / right columns
+    const leftCanvas = cropCanvas(troopCanvas, 0.00, 0.00, 0.48, 1.00);
+    const rightCanvas = cropCanvas(troopCanvas, 0.52, 0.00, 0.48, 1.00);
+
+    const leftText = await ocrCanvas(
+      leftCanvas,
       "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789, -"
     );
 
-    document.getElementById("troopOCR").value = text;
+    const rightText = await ocrCanvas(
+      rightCanvas,
+      "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789, -"
+    );
 
-    currentTroops = parseTroopText(text);
+    const combined = `--- LEFT COLUMN OCR ---\n${leftText}\n\n--- RIGHT COLUMN OCR ---\n${rightText}`;
+    document.getElementById("troopOCR").value = combined;
+
+    currentTroops = parseTroopColumns(leftText, rightText);
     document.getElementById("troopParsed").value = JSON.stringify(currentTroops, null, 2);
     showCombinedRecord();
 
