@@ -541,11 +541,14 @@ function getTroopFamily(name) {
   const familyWords = ["Infantry", "Cavalry", "Archer", "Archers", "Lancer", "Marksman"];
 
   function cleanNameLine(line) {
-    return String(line || "")
-      .replace(/[^A-Za-z0-9 \-]/g, " ")
-      .replace(/\s+/g, " ")
-      .trim();
-  }
+  return String(line || "")
+    .replace(/[@%>{}]/g, " ")
+    .replace(/\b[Aa]o\b/g, " ")
+    .replace(/\b[yghS]\b/g, " ")
+    .replace(/[^A-Za-z0-9 \-]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
 
   function extractTroopNamesFromLine(line) {
     const cleaned = cleanNameLine(line);
@@ -572,10 +575,13 @@ function getTroopFamily(name) {
   }
 
   function extractCounts(line) {
-    return (String(line || "").match(/\d[\d,]*/g) || [])
-      .map(cleanInt)
-      .filter(n => n >= 10); // ignore junk like 2
-  }
+  return (String(line || "")
+    .replace(/[@%>{}]/g, " ")
+    .replace(/\b[Aa]o\b/g, " ")
+    .match(/\d[\d,]*/g) || [])
+    .map(cleanInt)
+    .filter(n => n >= 10);
+}
 
   for (let i = 0; i < lines.length - 1; i++) {
     const nameLine = lines[i];
