@@ -695,19 +695,19 @@ function parseGovernorText(text) {
 
       let value = null;
 
-      const isPercentStat =
-        labelNorm === "win ratio" ||
-        labelNorm.includes("attack") ||
-        labelNorm.includes("defense") ||
-        labelNorm.includes("health") ||
-        labelNorm.includes("lethality") ||
-        labelNorm.includes("speed");
+const isPercentStat =
+  labelNorm === "win ratio" ||
+  labelNorm.includes("attack") ||
+  labelNorm.includes("defense") ||
+  labelNorm.includes("health") ||
+  labelNorm.includes("lethality") ||
+  labelNorm.includes("speed");
 
-      if (isPercentStat) {
-        value = parsePercentValue(line);
-      } else {
-        value = parseBigNumberValue(line);
-      }
+if (isPercentStat) {
+  value = parsePercentValue(line);
+} else {
+  value = parseBigNumberValue(line);
+}
 
       if (value !== null && value !== undefined) {
         setNested(rec, path, value);
