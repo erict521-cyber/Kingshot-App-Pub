@@ -269,7 +269,7 @@
 
     function cleanText(s) {
       return String(s || "")
-        .replace(/[’]/g, "'")
+        .replace(/[â€™]/g, "'")
         .replace(/\s+/g, " ")
         .trim();
     }
@@ -369,103 +369,83 @@ function parseIdentityTextV2(nameText, statsText) {
     }
   }
 
-// 5) Power: prefer a line that looks like a power line, not just any M/K value
-let powerRaw = null;
-
-for (const line of lines) {
-  if (/Kills|lls/i.test(line)) continue;
-
-  const cleanedLine = line.replace(/\s+/g, "");
-  const m = cleanedLine.match(/(\d+(?:\.\d+)?)([MK])/i);
-  if (m) {
-    powerRaw = `${m[1]}${m[2].toUpperCase()}`;
-    break;
-  }
-}
-
-// repair common OCR decimal-loss cases for power
-// examples:
-// 422M  -> 42.2M
-// 4202M -> 40.2M
-// only do this for suspiciously huge "M" values with no decimal
-if (powerRaw && /^[0-9]+M$/i.test(powerRaw)) {
-  const digits = powerRaw.replace(/M/i, "");
-
-  if (digits.length === 3) {
-    powerRaw = `${digits.slice(0,2)}.${digits.slice(2)}M`;
-  } else if (digits.length === 4) {
-    powerRaw = `${digits.slice(0,2)}.${digits.slice(2,3)}M`;
-  }
-}
-  // 6) Name: use stats crop first, fallback to name crop
-  // Expected examples:
-  // "ONE]thallay ("
-  // "[All]Aglaia"
-  // "[ONE]TitsThisWay"
-  let candidateName = null;
-
+  // 5) Power â€” clean and stable detection
   for (const line of lines) {
-  if (
-    !/Alliance|liance|Kingdom|ngdom|Kills|lls|ID/i.test(line) &&
-    !/\d{6,12}/.test(line)
-  ) {
-    const cleaned = line.replace(/[^A-Za-z0-9\[\]_-]/g, "").trim();
-    if (cleaned.length >= 4 && /[A-Za-z]/.test(cleaned)) {
-      candidateName = cleaned;
+    if (/Kills|lls/i.test(line)) continue;
+
+    const m = line.match(/(\d+(?:\.\d+)?)([MK])/i);
+    if (m) {
+      powerRaw = `${m[1]}${m[2].toUpperCase()}`;
       break;
     }
   }
-}
+
+  // Only fix obvious OCR errors like "422M" or "114M"
+  // Do not touch values that already have a decimal.
+  if (powerRaw && /^[0-9]{3,4}M$/i.test(powerRaw) && !powerRaw.includes(".")) {
+    const digits = powerRaw.replace(/M/i, "");
+
+    // For common player power values, 3 digits usually means XX.XM
+    if (digits.length === 3) {
+      powerRaw = `${digits.slice(0,2)}.${digits.slice(2)}M`; // 422 -> 42.2M
+    } else if (digits.length === 4) {
+      powerRaw = `${digits.slice(0,2)}.${digits.slice(2,3)}M`; // 1140 -> 11.4M
+    }
+  }
+
+  // 6) Name: use stats crop first, fallback to name crop
+  let candidateName = null;
+
+  for (const line of lines) {
+    if (
+      !/Alliance|liance|Kingdom|ngdom|Kills|lls|ID/i.test(line) &&
+      !/\d{6,12}/.test(line)
+    ) {
+      const cleaned = line.replace(/[^A-Za-z0-9\[\]_-]/g, "").trim();
+      if (cleaned.length >= 4 && /[A-Za-z]/.test(cleaned)) {
+        candidateName = cleaned;
+        break;
+      }
+    }
+  }
 
   if (!candidateName) {
-    const nameLines = String(rawName || "")
+    const nameLines = rawName
       .split(/\n+/)
       .map(s => s.trim())
       .filter(Boolean);
     candidateName = nameLines[0] || "";
   }
 
-  candidateName = String(candidateName || "")
-  .replace(/[^A-Za-z0-9\[\]_-]/g, "")
-  .trim();
-
-// repair missing opening bracket
-if (!candidateName.startsWith("[") && candidateName.includes("]")) {
-  candidateName = "[" + candidateName;
-}
-
-// repair missing closing bracket in alliance tag
-// example: [AllAglaia -> [All]Aglaia
-if (alliance && candidateName && candidateName.startsWith("[" + alliance) && !candidateName.startsWith("[" + alliance + "]")) {
-  candidateName = candidateName.replace("[" + alliance, "[" + alliance + "]");
-}
-
-// trim obvious trailing OCR junk
-candidateName = candidateName.replace(/[Kk]+$/, "");
-
-// fallback: try to recover a tagged name directly from stats text
-if (!candidateName) {
-  const m =
-    rawStats.match(/(\[[A-Za-z]+\][A-Za-z0-9_-]+)/) ||
-    rawStats.match(/([A-Za-z]+\][A-Za-z0-9_-]+)/);
-
-  if (m) {
-    candidateName = m[1];
+  // fallback: try to recover a tagged name directly from stats text
+  if (!candidateName) {
+    const m =
+      rawStats.match(/(\[[A-Za-z]+\][A-Za-z0-9_-]+)/) ||
+      rawStats.match(/([A-Za-z]+\][A-Za-z0-9_-]+)/);
+    if (m) candidateName = m[1];
   }
-}
-  // repair missing opening bracket
-  // "ONE]thallay" -> "[ONE]thallay"
+
+  candidateName = String(candidateName || "")
+    .replace(/[^A-Za-z0-9\[\]_-]/g, "")
+    .trim();
+
+  // Fix missing opening bracket
   if (!candidateName.startsWith("[") && candidateName.includes("]")) {
     candidateName = "[" + candidateName;
   }
 
-  // if alliance is known, normalize tag
-  if (candidateName && alliance) {
-    const tagPattern = new RegExp("^\\[?" + alliance + "\\]", "i");
-    if (tagPattern.test(candidateName)) {
-      candidateName = candidateName.replace(tagPattern, "[" + alliance + "]");
-    }
+  // Fix missing closing bracket
+  if (
+    alliance &&
+    candidateName &&
+    candidateName.startsWith("[" + alliance) &&
+    !candidateName.startsWith("[" + alliance + "]")
+  ) {
+    candidateName = candidateName.replace("[" + alliance, "[" + alliance + "]");
   }
+
+  // Remove trailing junk (like K)
+  candidateName = candidateName.replace(/[Kk]+$/, "");
 
   if (candidateName.length >= 4) {
     playerName = candidateName;
@@ -519,7 +499,8 @@ if (!candidateName) {
   rec.confidence.overall = rec.review_flags.length ? 0.78 : 0.98;
   return rec;
 }
-    function getTroopFamily(name) {
+
+function getTroopFamily(name) {
       const n = String(name || "").toLowerCase();
 
       if (n.includes("infantry")) return "infantry";
@@ -672,7 +653,6 @@ async function ocrCanvas(canvas, whitelist = "") {
     // Crop 2: info block with ID, power, kills, alliance, kingdom
     const statsCanvas = cropCanvas(img, 0.35, 0.72, 0.53, 0.21);
 
-
     const nameText = await ocrCanvas(
       nameCanvas,
       "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789[]-_"
@@ -810,7 +790,7 @@ async function ocrCanvas(canvas, whitelist = "") {
         const alliance = rec.identity?.alliance_name?.value || "";
         const opt = document.createElement("option");
         opt.value = id;
-        opt.textContent = `${id}${name ? " — " + name : ""}${alliance ? " — " + alliance : ""}`;
+        opt.textContent = `${id}${name ? " â€” " + name : ""}${alliance ? " â€” " + alliance : ""}`;
         sel.appendChild(opt);
       });
 
