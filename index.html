@@ -1,0 +1,757 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Kingshot Capture v1</title>
+  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@4/dist/tesseract.min.js"></script>
+  <style>
+    :root {
+      --bg: #f5f5f7;
+      --card: #ffffff;
+      --text: #111111;
+      --muted: #666666;
+      --border: #d9d9df;
+      --soft: #eef1f5;
+      --ok: #0a6b2d;
+      --warn: #9a4d00;
+    }
+
+    body {
+      font-family: Arial, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      margin: 0;
+      padding: 12px;
+    }
+
+    .wrap {
+      max-width: 1100px;
+      margin: 0 auto;
+    }
+
+    h1 {
+      margin: 0 0 8px 0;
+      font-size: 1.45rem;
+    }
+
+    .small {
+      color: var(--muted);
+      font-size: 0.95rem;
+      line-height: 1.4;
+    }
+
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 14px;
+      margin-top: 12px;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 12px;
+    }
+
+    @media (min-width: 900px) {
+      .grid {
+        grid-template-columns: 1fr 1fr;
+      }
+    }
+
+    label {
+      display: block;
+      font-weight: 600;
+      margin-top: 10px;
+      margin-bottom: 6px;
+    }
+
+    input[type="file"],
+    textarea,
+    select {
+      width: 100%;
+      box-sizing: border-box;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 10px;
+      font-size: 1rem;
+      background: white;
+      color: var(--text);
+    }
+
+    textarea {
+      min-height: 140px;
+      font-family: monospace;
+      resize: vertical;
+    }
+
+    button {
+      border: 1px solid var(--border);
+      background: white;
+      color: var(--text);
+      padding: 10px 12px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 1rem;
+      margin-top: 8px;
+      margin-right: 8px;
+    }
+
+    button:hover {
+      background: var(--soft);
+    }
+
+    .status {
+      margin-top: 8px;
+      min-height: 1.2rem;
+      font-size: 0.95rem;
+    }
+
+    .ok {
+      color: var(--ok);
+    }
+
+    .warn {
+      color: var(--warn);
+    }
+
+    .table-wrap {
+      overflow: auto;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 8px;
+    }
+
+    th, td {
+      border: 1px solid var(--border);
+      padding: 8px;
+      text-align: left;
+      vertical-align: top;
+    }
+
+    th {
+      background: var(--soft);
+    }
+
+    .badge {
+      display: inline-block;
+      padding: 4px 8px;
+      border-radius: 999px;
+      background: var(--soft);
+      margin: 4px 6px 0 0;
+      font-size: 0.88rem;
+    }
+
+    code {
+      background: var(--soft);
+      padding: 2px 5px;
+      border-radius: 4px;
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>Kingshot Player + Troops Capture v1</h1>
+    <div class="small">
+      Fresh capture app focused only on <b>player identity</b> and <b>troop preview</b>.
+      Records save by <b>player_id</b>. This version avoids calculator logic and only captures structured data.
+    </div>
+
+    <div class="card">
+      <b>How this version works</b>
+      <div class="small" style="margin-top:8px;">
+        1) Upload a player identity screenshot.<br />
+        2) Upload a troop preview screenshot.<br />
+        3) Review parsed output.<br />
+        4) Save by <code>player_id</code>.<br />
+        5) Copy the database JSON when needed.
+      </div>
+    </div>
+
+    <div class="grid">
+      <div class="card">
+        <b>Player identity capture</b>
+        <div class="small" style="margin-top:6px;">
+          Expected fields: player ID, player name, alliance, kingdom, power, kills.
+        </div>
+
+        <label for="identityFile">Identity screenshot</label>
+        <input id="identityFile" type="file" accept="image/*" />
+        <button onclick="readIdentity()">Read Identity</button>
+        <div id="identityStatus" class="status"></div>
+
+        <label for="identityParsed">Parsed identity record</label>
+        <textarea id="identityParsed" placeholder="Parsed identity JSON will appear here."></textarea>
+
+        <label for="identityOCR">Identity OCR text</label>
+        <textarea id="identityOCR" placeholder="Raw identity OCR text will appear here."></textarea>
+      </div>
+
+      <div class="card">
+        <b>Troop preview capture</b>
+        <div class="small" style="margin-top:6px;">
+          Parses troop rows dynamically and normalizes them into infantry, cavalry, and archers.
+        </div>
+
+        <label for="troopFile">Troop screenshot</label>
+        <input id="troopFile" type="file" accept="image/*" />
+        <button onclick="readTroops()">Read Troops</button>
+        <div id="troopStatus" class="status"></div>
+
+        <label for="troopParsed">Parsed troop record</label>
+        <textarea id="troopParsed" placeholder="Parsed troop JSON will appear here."></textarea>
+
+        <label for="troopOCR">Troop OCR text</label>
+        <textarea id="troopOCR" placeholder="Raw troop OCR text will appear here."></textarea>
+      </div>
+    </div>
+
+    <div class="card">
+      <b>Current combined record</b>
+      <div class="small" style="margin-top:6px;">
+        This combines current identity + current troop capture.
+      </div>
+      <div>
+        <button onclick="buildRecord()">Build Record</button>
+        <button onclick="saveCurrentRecord()">Save / Update Player</button>
+        <button onclick="clearCurrentParse()">Clear Current Parse</button>
+      </div>
+      <div id="saveStatus" class="status"></div>
+      <textarea id="combinedRecord" placeholder="Combined record will appear here."></textarea>
+    </div>
+
+    <div class="card">
+      <b>Saved players</b>
+
+      <label for="playerSelect">Player list</label>
+      <select id="playerSelect"></select>
+
+      <div>
+        <button onclick="loadSelectedPlayer()">Load Selected Player</button>
+        <button onclick="deleteSelectedPlayer()">Delete Selected Player</button>
+      </div>
+
+      <div id="playerListStatus" class="status"></div>
+      <div id="savedPlayersTable" class="table-wrap"></div>
+    </div>
+
+    <div class="card">
+      <b>Database JSON</b>
+      <div class="small" style="margin-top:6px;">
+        This is the canonical local database for this capture tool.
+      </div>
+      <div>
+        <button onclick="refreshDatabaseBox()">Refresh JSON</button>
+        <button onclick="copyDatabaseJson()">Copy JSON</button>
+      </div>
+      <div id="databaseStatus" class="status"></div>
+      <textarea id="databaseJson" placeholder="Database JSON will appear here."></textarea>
+    </div>
+  </div>
+
+  <script>
+    const DB_KEY = "kingshot_player_troops_capture_v1_db";
+
+    let currentIdentity = null;
+    let currentTroops = null;
+
+    function setStatus(id, msg = "", cls = "") {
+      const el = document.getElementById(id);
+      if (!el) return;
+      el.className = "status " + cls;
+      el.textContent = msg;
+    }
+
+    function cleanText(s) {
+      return String(s || "")
+        .replace(/[’]/g, "'")
+        .replace(/\s+/g, " ")
+        .trim();
+    }
+
+    function cleanInt(s) {
+      return parseInt(String(s || "").replace(/,/g, "").replace(/[^\d]/g, ""), 10) || 0;
+    }
+
+    function parseShorthandNumber(raw) {
+      const s = String(raw || "").trim().replace(/,/g, "");
+      const m = s.match(/^(\d+(?:\.\d+)?)([MK])?$/i);
+      if (!m) return cleanInt(s);
+
+      const value = parseFloat(m[1] || "0");
+      const unit = (m[2] || "").toUpperCase();
+
+      if (unit === "M") return Math.round(value * 1000000);
+      if (unit === "K") return Math.round(value * 1000);
+      return Math.round(value);
+    }
+
+    function getDb() {
+      try {
+        const raw = localStorage.getItem(DB_KEY);
+        if (!raw) return { version: "v1", players: {} };
+        const parsed = JSON.parse(raw);
+        if (parsed && typeof parsed === "object" && parsed.players) return parsed;
+      } catch (err) {
+        console.error(err);
+      }
+      return { version: "v1", players: {} };
+    }
+
+    function setDb(db) {
+      localStorage.setItem(DB_KEY, JSON.stringify(db));
+    }
+
+    function nowIso() {
+      return new Date().toISOString();
+    }
+
+    async function ocr(file) {
+      const result = await Tesseract.recognize(file, "eng");
+      return result?.data?.text || "";
+    }
+
+    function parseIdentityText(text) {
+      const raw = String(text || "");
+      const lines = raw
+        .split(/\n+/)
+        .map(l => l.trim())
+        .filter(Boolean);
+
+      let playerId = "";
+      let playerName = "";
+
+      for (let i = 0; i < lines.length; i++) {
+        if (/ID[:\s]*\d+/i.test(lines[i])) {
+          playerId = (lines[i].match(/(\d{6,12})/) || [])[1] || "";
+          playerName = lines[i - 1] || "";
+          break;
+        }
+      }
+
+      playerName = playerName.replace(/[^a-zA-Z0-9\[\]\-_]/g, "");
+
+      const alliance = (raw.match(/Alliance[:\s]*([A-Za-z0-9_\-\[\]]{1,20})/i) || [])[1] || "";
+      const kingdom = (raw.match(/#\s*(\d{3,5})/) || [])[1] || "";
+
+      const killsRaw = (raw.match(/Kills[:\s]*([\d.,MK]+)/i) || [])[1] || "";
+      const powerMatch = raw.match(/Power[:\s]*([\d.,MK]+)/i);
+      let powerRaw = powerMatch ? powerMatch[1] : "";
+
+      if (!powerRaw) {
+        const fallbackM = raw.match(/(\d+(?:\.\d+)?)\s*M/i);
+        if (fallbackM) powerRaw = fallbackM[1] + "M";
+      }
+
+      const rec = {
+        screen_type: "player_identity",
+        player_id: {
+          value: playerId,
+          confidence: playerId ? 0.99 : 0.0,
+          source: "identity_upload"
+        },
+        player_name: {
+          value: playerName,
+          confidence: playerName ? 0.9 : 0.0
+        },
+        alliance_name: {
+          value: cleanText(alliance),
+          confidence: alliance ? 0.98 : 0.0
+        },
+        kingdom: {
+          value: kingdom || null,
+          confidence: kingdom ? 0.99 : 0.0
+        },
+        power: {
+          value: powerRaw ? parseShorthandNumber(powerRaw) : null,
+          raw: powerRaw || null,
+          confidence: powerRaw ? 0.9 : 0.0,
+          source: "observed"
+        },
+        kills: {
+          value: killsRaw ? parseShorthandNumber(killsRaw) : null,
+          raw: killsRaw || null,
+          confidence: killsRaw ? 0.95 : 0.0,
+          source: "observed"
+        },
+        captured_at: nowIso(),
+        confidence: {
+          overall: 0
+        },
+        review_flags: []
+      };
+
+      if (!rec.player_id.value) rec.review_flags.push("Missing player_id");
+      if (!rec.player_name.value) rec.review_flags.push("Missing player_name");
+      if (!rec.alliance_name.value) rec.review_flags.push("Missing alliance_name");
+      if (!rec.kingdom.value) rec.review_flags.push("Missing kingdom");
+      if (!rec.power.value) rec.review_flags.push("Missing power");
+      if (rec.kills.value === null) rec.review_flags.push("Missing kills");
+
+      rec.confidence.overall = rec.review_flags.length ? 0.72 : 0.97;
+      return rec;
+    }
+
+    function getTroopFamily(name) {
+      const n = String(name || "").toLowerCase();
+
+      if (n.includes("infantry")) return "infantry";
+      if (n.includes("cavalry") || n.includes("lancer")) return "cavalry";
+      if (n.includes("archer") || n.includes("archers") || n.includes("marksman")) return "archers";
+
+      return "unknown";
+    }
+
+    function isLikelyTroopRow(rawName, count) {
+      if (!rawName || !count) return false;
+      const family = getTroopFamily(rawName);
+      if (family === "unknown") return false;
+      if (count < 1) return false;
+      return true;
+    }
+
+    function parseTroopText(text) {
+      const raw = String(text || "");
+      const lines = raw
+        .split(/\n+/)
+        .map(l => cleanText(l))
+        .filter(Boolean);
+
+      const troopRows = [];
+
+      for (const line of lines) {
+        const m = line.match(/([A-Za-z\s]+?)\s+(\d[\d,]*)$/);
+        if (!m) continue;
+
+        const rawName = cleanText(m[1]);
+        const count = cleanInt(m[2]);
+        const family = getTroopFamily(rawName);
+
+        if (!isLikelyTroopRow(rawName, count)) continue;
+
+        troopRows.push({
+          raw_name: rawName,
+          family,
+          count
+        });
+      }
+
+      const totals = {
+        infantry: 0,
+        cavalry: 0,
+        archers: 0
+      };
+
+      troopRows.forEach(row => {
+        if (totals[row.family] !== undefined) {
+          totals[row.family] += row.count;
+        }
+      });
+
+      const troopRec = {
+        screen_type: "troops_preview",
+        troop_rows: troopRows,
+        troop_totals: {
+          infantry: totals.infantry,
+          cavalry: totals.cavalry,
+          archers: totals.archers,
+          total: totals.infantry + totals.cavalry + totals.archers
+        },
+        captured_at: nowIso(),
+        confidence: {
+          overall: troopRows.length ? 0.94 : 0.0
+        },
+        review_flags: []
+      };
+
+      if (!troopRows.length) troopRec.review_flags.push("No troop rows detected");
+      if (!totals.infantry) troopRec.review_flags.push("No infantry rows detected");
+      if (!totals.cavalry) troopRec.review_flags.push("No cavalry rows detected");
+      if (!totals.archers) troopRec.review_flags.push("No archer rows detected");
+
+      if (troopRec.review_flags.length) {
+        troopRec.confidence.overall = 0.72;
+      }
+
+      return troopRec;
+    }
+
+    async function readIdentity() {
+      const file = document.getElementById("identityFile").files[0];
+      if (!file) {
+        setStatus("identityStatus", "Choose an identity screenshot first.", "warn");
+        return;
+      }
+
+      try {
+        setStatus("identityStatus", `Reading ${file.name}...`);
+        const text = await ocr(file);
+        document.getElementById("identityOCR").value = text;
+
+        currentIdentity = parseIdentityText(text);
+        document.getElementById("identityParsed").value = JSON.stringify(currentIdentity, null, 2);
+        showCombinedRecord();
+
+        const flags = currentIdentity.review_flags || [];
+        setStatus(
+          "identityStatus",
+          flags.length
+            ? `Identity parsed with warnings: ${flags.join("; ")}`
+            : "Identity parsed successfully.",
+          flags.length ? "warn" : "ok"
+        );
+      } catch (err) {
+        console.error(err);
+        setStatus("identityStatus", "Identity OCR failed.", "warn");
+      }
+    }
+
+    async function readTroops() {
+      const file = document.getElementById("troopFile").files[0];
+      if (!file) {
+        setStatus("troopStatus", "Choose a troop screenshot first.", "warn");
+        return;
+      }
+
+      try {
+        setStatus("troopStatus", `Reading ${file.name}...`);
+        const text = await ocr(file);
+        document.getElementById("troopOCR").value = text;
+
+        currentTroops = parseTroopText(text);
+        document.getElementById("troopParsed").value = JSON.stringify(currentTroops, null, 2);
+        showCombinedRecord();
+
+        const flags = currentTroops.review_flags || [];
+        setStatus(
+          "troopStatus",
+          flags.length
+            ? `Troops parsed with warnings: ${flags.join("; ")}`
+            : "Troops parsed successfully.",
+          flags.length ? "warn" : "ok"
+        );
+      } catch (err) {
+        console.error(err);
+        setStatus("troopStatus", "Troop OCR failed.", "warn");
+      }
+    }
+
+    function buildCombinedRecord() {
+      const playerId = currentIdentity?.player_id?.value || "";
+      return {
+        player_id: playerId,
+        identity: currentIdentity,
+        troops: currentTroops,
+        updated_at: nowIso()
+      };
+    }
+
+    function showCombinedRecord() {
+      document.getElementById("combinedRecord").value = JSON.stringify(buildCombinedRecord(), null, 2);
+    }
+
+    function buildRecord() {
+      showCombinedRecord();
+      setStatus("saveStatus", "Combined record built.", "ok");
+    }
+
+    function clearCurrentParse() {
+      currentIdentity = null;
+      currentTroops = null;
+
+      document.getElementById("identityParsed").value = "";
+      document.getElementById("identityOCR").value = "";
+      document.getElementById("troopParsed").value = "";
+      document.getElementById("troopOCR").value = "";
+      document.getElementById("combinedRecord").value = "";
+
+      setStatus("identityStatus", "");
+      setStatus("troopStatus", "");
+      setStatus("saveStatus", "Cleared current parse.", "ok");
+    }
+
+    function saveCurrentRecord() {
+      const record = buildCombinedRecord();
+      if (!record.player_id) {
+        setStatus("saveStatus", "Cannot save without player_id.", "warn");
+        return;
+      }
+
+      const db = getDb();
+      db.players[record.player_id] = db.players[record.player_id] || {};
+      db.players[record.player_id].player_id = record.player_id;
+      db.players[record.player_id].identity = record.identity || null;
+      db.players[record.player_id].troops = record.troops || null;
+      db.players[record.player_id].updated_at = nowIso();
+
+      setDb(db);
+      refreshPlayerList(record.player_id);
+      refreshSavedPlayersTable();
+      refreshDatabaseBox();
+
+      setStatus("saveStatus", `Saved player ${record.player_id}.`, "ok");
+    }
+
+    function refreshPlayerList(selectedId = "") {
+      const db = getDb();
+      const sel = document.getElementById("playerSelect");
+      sel.innerHTML = "";
+
+      const ids = Object.keys(db.players).sort();
+      if (!ids.length) {
+        const opt = document.createElement("option");
+        opt.value = "";
+        opt.textContent = "No saved players";
+        sel.appendChild(opt);
+        return;
+      }
+
+      ids.forEach(id => {
+        const rec = db.players[id];
+        const name = rec.identity?.player_name?.value || "";
+        const alliance = rec.identity?.alliance_name?.value || "";
+        const opt = document.createElement("option");
+        opt.value = id;
+        opt.textContent = `${id}${name ? " — " + name : ""}${alliance ? " — " + alliance : ""}`;
+        sel.appendChild(opt);
+      });
+
+      if (selectedId && ids.includes(selectedId)) {
+        sel.value = selectedId;
+      }
+    }
+
+    function loadSelectedPlayer() {
+      const id = document.getElementById("playerSelect").value;
+      const db = getDb();
+      const rec = db.players[id];
+
+      if (!rec) {
+        setStatus("playerListStatus", "Choose a saved player first.", "warn");
+        return;
+      }
+
+      currentIdentity = rec.identity || null;
+      currentTroops = rec.troops || null;
+
+      document.getElementById("identityParsed").value = currentIdentity ? JSON.stringify(currentIdentity, null, 2) : "";
+      document.getElementById("troopParsed").value = currentTroops ? JSON.stringify(currentTroops, null, 2) : "";
+      showCombinedRecord();
+
+      setStatus("playerListStatus", `Loaded player ${id}.`, "ok");
+    }
+
+    function deleteSelectedPlayer() {
+      const id = document.getElementById("playerSelect").value;
+      const db = getDb();
+
+      if (!db.players[id]) {
+        setStatus("playerListStatus", "Choose a saved player first.", "warn");
+        return;
+      }
+
+      delete db.players[id];
+      setDb(db);
+
+      refreshPlayerList();
+      refreshSavedPlayersTable();
+      refreshDatabaseBox();
+
+      setStatus("playerListStatus", `Deleted player ${id}.`, "ok");
+    }
+
+    function refreshSavedPlayersTable() {
+      const db = getDb();
+      const ids = Object.keys(db.players).sort();
+      const container = document.getElementById("savedPlayersTable");
+
+      if (!ids.length) {
+        container.innerHTML = "No saved players yet.";
+        return;
+      }
+
+      let html = `
+        <table>
+          <thead>
+            <tr>
+              <th>Player ID</th>
+              <th>Name</th>
+              <th>Alliance</th>
+              <th>Kingdom</th>
+              <th>Power</th>
+              <th>Kills</th>
+              <th>Troops</th>
+            </tr>
+          </thead>
+          <tbody>
+      `;
+
+      ids.forEach(id => {
+        const rec = db.players[id];
+        const p = rec.identity || {};
+        const t = rec.troops || {};
+        html += `
+          <tr>
+            <td>${id}</td>
+            <td>${p.player_name?.value || ""}</td>
+            <td>${p.alliance_name?.value || ""}</td>
+            <td>${p.kingdom?.value || ""}</td>
+            <td>${p.power?.value ?? ""}</td>
+            <td>${p.kills?.value ?? ""}</td>
+            <td>
+              ${
+                t.troop_totals
+                  ? `Inf ${t.troop_totals.infantry || 0}<br>Cav ${t.troop_totals.cavalry || 0}<br>Arc ${t.troop_totals.archers || 0}`
+                  : ""
+              }
+            </td>
+          </tr>
+        `;
+      });
+
+      html += "</tbody></table>";
+      container.innerHTML = html;
+    }
+
+    function refreshDatabaseBox() {
+      const db = getDb();
+      document.getElementById("databaseJson").value = JSON.stringify(db, null, 2);
+      setStatus("databaseStatus", "Database JSON refreshed.", "ok");
+    }
+
+    async function copyDatabaseJson() {
+      const el = document.getElementById("databaseJson");
+      if (!el.value) refreshDatabaseBox();
+
+      try {
+        if (navigator.clipboard && window.isSecureContext) {
+          await navigator.clipboard.writeText(el.value);
+          setStatus("databaseStatus", "Database JSON copied.", "ok");
+          return;
+        }
+
+        el.focus();
+        el.select();
+        const ok = document.execCommand("copy");
+        setStatus(
+          "databaseStatus",
+          ok ? "Database JSON copied." : "Copy failed. Long-press and copy manually.",
+          ok ? "ok" : "warn"
+        );
+      } catch (err) {
+        console.error(err);
+        setStatus("databaseStatus", "Copy failed. Long-press and copy manually.", "warn");
+      }
+    }
+
+    refreshPlayerList();
+    refreshSavedPlayersTable();
+    refreshDatabaseBox();
+  </script>
+</body>
+</html>
