@@ -433,70 +433,83 @@
     }
 
     function parseTroopText(text) {
-      const raw = String(text || "");
-      const lines = raw
-        .split(/\n+/)
-        .map(l => cleanText(l))
-        .filter(Boolean);
+  const raw = String(text || "");
+  const lines = raw
+    .split(/\n+/)
+    .map(l => cleanText(l))
+    .filter(Boolean);
 
-      const troopRows = [];
+  const troop_rows = [];
 
-      for (const line of lines) {
-        const m = line.match(/([A-Za-z\s]+?)\s+(\d[\d,]*)$/);
-        if (!m) continue;
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    const family = getTroopFamily(line);
 
-        const rawName = cleanText(m[1]);
-        const count = cleanInt(m[2]);
-        const family = getTroopFamily(rawName);
+    if (family === "unknown") continue;
 
-        if (!isLikelyTroopRow(rawName, count)) continue;
+    let count = 0;
 
-        troopRows.push({
-          raw_name: rawName,
-          family,
-          count
-        });
-      }
-
-      const totals = {
-        infantry: 0,
-        cavalry: 0,
-        archers: 0
-      };
-
-      troopRows.forEach(row => {
-        if (totals[row.family] !== undefined) {
-          totals[row.family] += row.count;
-        }
-      });
-
-      const troopRec = {
-        screen_type: "troops_preview",
-        troop_rows: troopRows,
-        troop_totals: {
-          infantry: totals.infantry,
-          cavalry: totals.cavalry,
-          archers: totals.archers,
-          total: totals.infantry + totals.cavalry + totals.archers
-        },
-        captured_at: nowIso(),
-        confidence: {
-          overall: troopRows.length ? 0.94 : 0.0
-        },
-        review_flags: []
-      };
-
-      if (!troopRows.length) troopRec.review_flags.push("No troop rows detected");
-      if (!totals.infantry) troopRec.review_flags.push("No infantry rows detected");
-      if (!totals.cavalry) troopRec.review_flags.push("No cavalry rows detected");
-      if (!totals.archers) troopRec.review_flags.push("No archer rows detected");
-
-      if (troopRec.review_flags.length) {
-        troopRec.confidence.overall = 0.72;
-      }
-
-      return troopRec;
+    // same-line count
+    let sameLine = line.match(/(\d[\d,]*)$/);
+    if (sameLine) {
+      count = cleanInt(sameLine[1]);
     }
+
+    // next-line count fallback
+    if (!count && i + 1 < lines.length) {
+      let nextLine = lines[i + 1].match(/^(\d[\d,]*)$/);
+      if (nextLine) {
+        count = cleanInt(nextLine[1]);
+      }
+    }
+
+    if (!count) continue;
+
+    troop_rows.push({
+      raw_name: line.replace(/\d[\d,]*$/, "").trim(),
+      family,
+      count
+    });
+  }
+
+  const troop_totals = {
+    infantry: 0,
+    cavalry: 0,
+    archers: 0,
+    total: 0
+  };
+
+  troop_rows.forEach(row => {
+    if (troop_totals[row.family] !== undefined) {
+      troop_totals[row.family] += row.count;
+    }
+  });
+
+  troop_totals.total =
+    troop_totals.infantry +
+    troop_totals.cavalry +
+    troop_totals.archers;
+
+  const rec = {
+    screen_type: "troops_preview",
+    troop_rows,
+    troop_totals,
+    captured_at: nowIso(),
+    confidence: {
+      overall: troop_rows.length ? 0.94 : 0.0
+    },
+    review_flags: []
+  };
+
+  if (!troop_rows.length) rec.review_flags.push("No troop rows detected");
+  if (!troop_totals.infantry) rec.review_flags.push("No infantry rows detected");
+  if (!troop_totals.cavalry) rec.review_flags.push("No cavalry rows detected");
+  if (!troop_totals.archers) rec.review_flags.push("No archer rows detected");
+
+  if (rec.review_flags.length) rec.confidence.overall = 0.72;
+
+  return rec;
+}
 
     async function readIdentity() {
       const file = document.getElementById("identityFile").files[0];
