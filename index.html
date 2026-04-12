@@ -670,7 +670,7 @@ async function ocrCanvas(canvas, whitelist = "") {
     const nameCanvas = cropCanvas(img, 0.28, 0.645, 0.64, 0.095);
 
     // Crop 2: info block with ID, power, kills, alliance, kingdom
-    const statsCanvas = cropCanvas(img, 0.38, 0.72, 0.50, 0.21);
+    const statsCanvas = cropCanvas(img, 0.35, 0.72, 0.53, 0.21);
 
 
     const nameText = await ocrCanvas(
