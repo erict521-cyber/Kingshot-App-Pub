@@ -580,13 +580,18 @@ function parseBigNumberValue(raw) {
 function maybeFlagSuspiciousTroopStat(labelNorm, value, rec) {
   if (value == null) return;
 
-  const troopStatLabels = [
-    "infantry attack", "infantry defense", "infantry health", "infantry lethality",
-    "cavalry attack", "cavalry defense", "cavalry health", "cavalry lethality",
-    "archer attack", "archer defense", "archer health", "archer lethality"
-  ];
+  const isTroopStat =
+    labelNorm.includes("infantry ") ||
+    labelNorm.includes("cavalry ") ||
+    labelNorm.includes("archer ");
 
-  if (troopStatLabels.includes(labelNorm) && value >= 10 && value < 20) {
+  const isCoreStat =
+    labelNorm.includes("attack") ||
+    labelNorm.includes("defense") ||
+    labelNorm.includes("health") ||
+    labelNorm.includes("lethality");
+
+  if (isTroopStat && isCoreStat && value >= 10 && value < 20) {
     rec.review_flags.push(`Suspicious ${labelNorm}: ${value}`);
   }
 }
@@ -719,6 +724,7 @@ const isPercentStat =
 
 if (isPercentStat) {
   value = parsePercentValue(line);
+  maybeFlagSuspiciousTroopStat(labelNorm, value, rec);
 } else {
   value = parseBigNumberValue(line);
 }
