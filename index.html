@@ -538,9 +538,25 @@ function normalizeGovernorLabel(label) {
 }
 
 function parsePercentValue(raw) {
-  const matches = String(raw || "").match(/-?\d+(?:\.\d+)?/g) || [];
+  let s = String(raw || "");
+
+  // Common OCR fixes for this game UI
+  // 1M.3 -> 111.3
+  // m.3  -> 111.3
+  s = s
+    .replace(/\b1M\.(\d)\b/g, "111.$1")
+    .replace(/\bm\.(\d)\b/gi, "111.$1")
+    .replace(/\bM\.(\d)\b/g, "11.$1");
+
+  const matches = s.match(/-?\d+(?:\.\d+)?/g) || [];
   if (!matches.length) return null;
-  return parseFloat(matches[matches.length - 1]);
+
+  // Use the largest parsed number, not the first or last.
+  // This protects against OCR junk like "1 11.3"
+  const nums = matches.map(v => parseFloat(v)).filter(v => !isNaN(v));
+  if (!nums.length) return null;
+
+  return Math.max(...nums);
 }
 
 function parseBigNumberValue(raw) {
