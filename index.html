@@ -957,19 +957,23 @@ const statsCanvas = cropCanvas(img, 0.33, 0.70, 0.56, 0.23);
     }
 
     function clearCurrentParse() {
-      currentIdentity = null;
-      currentTroops = null;
+  currentIdentity = null;
+  currentTroops = null;
+  currentGovernor = null;
 
-      document.getElementById("identityParsed").value = "";
-      document.getElementById("identityOCR").value = "";
-      document.getElementById("troopParsed").value = "";
-      document.getElementById("troopOCR").value = "";
-      document.getElementById("combinedRecord").value = "";
+  document.getElementById("identityParsed").value = "";
+  document.getElementById("identityOCR").value = "";
+  document.getElementById("troopParsed").value = "";
+  document.getElementById("troopOCR").value = "";
+  document.getElementById("govParsed").value = "";
+  document.getElementById("govOCR").value = "";
+  document.getElementById("combinedRecord").value = "";
 
-      setStatus("identityStatus", "");
-      setStatus("troopStatus", "");
-      setStatus("saveStatus", "Cleared current parse.", "ok");
-    }
+  setStatus("identityStatus", "");
+  setStatus("troopStatus", "");
+  setStatus("govStatus", "");
+  setStatus("saveStatus", "Cleared current parse.", "ok");
+}
 
     function saveCurrentRecord() {
       const record = buildCombinedRecord();
