@@ -538,8 +538,9 @@ function normalizeGovernorLabel(label) {
 }
 
 function parsePercentValue(raw) {
-  const m = String(raw || "").match(/-?\d+(?:\.\d+)?/);
-  return m ? parseFloat(m[0]) : null;
+  const matches = String(raw || "").match(/-?\d+(?:\.\d+)?/g) || [];
+  if (!matches.length) return null;
+  return parseFloat(matches[matches.length - 1]);
 }
 
 function parseGovernorText(text) {
