@@ -537,55 +537,44 @@ function getTroopFamily(name) {
 
   const troop_rows = [];
 
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i];
-
-    // Find a line that looks like a troop label
-    const family = getTroopFamily(line);
-    if (family === "unknown") continue;
-
-    let rawName = line;
-    let count = 0;
-
-    // Case 1: same line, e.g. "Supreme Infantry 77,761"
-    let sameLineMatch = line.match(/(.+?)\s+(\d[\d,]*)$/);
-    if (sameLineMatch) {
-      rawName = sameLineMatch[1].trim();
-      count = cleanInt(sameLineMatch[2]);
-    }
-
-    // Case 2: next line is just the number
-    if (!count && i + 1 < lines.length) {
-      const next = lines[i + 1];
-      const nextMatch = next.match(/^(\d[\d,]*)$/);
-      if (nextMatch) {
-        count = cleanInt(nextMatch[1]);
-      }
-    }
-
-    // Case 3: OCR split weirdly, number may be in next 2 lines
-    if (!count) {
-      for (let j = i + 1; j <= Math.min(i + 2, lines.length - 1); j++) {
-        const m = lines[j].match(/(\d[\d,]*)/);
-        if (m) {
-          count = cleanInt(m[1]);
-          break;
-        }
-      }
-    }
-
-    if (!count) continue;
-
-    rawName = rawName.replace(/[^A-Za-z0-9 \-_]/g, "").trim();
-
-    troop_rows.push({
-      raw_name: rawName,
-      family,
-      count
-    });
+  function splitTwoTroopNames(line) {
+    const matches = [...line.matchAll(/([A-Za-z]+(?:\s+[A-Za-z]+)*\s+(?:Infantry|Cavalry|Archer|Archers|Lancer|Marksman))/gi)];
+    return matches.map(m => m[1].trim());
   }
 
-  // Deduplicate identical row name + count pairs
+  function extractCounts(line) {
+    const matches = line.match(/\d[\d,]*/g) || [];
+    return matches.map(cleanInt).filter(n => n > 0);
+  }
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    const names = splitTwoTroopNames(line);
+
+    if (!names.length) continue;
+
+    let counts = [];
+    if (i + 1 < lines.length) {
+      counts = extractCounts(lines[i + 1]);
+    }
+
+    // Pair left/right names with left/right counts
+    for (let n = 0; n < names.length; n++) {
+      const rawName = names[n];
+      const family = getTroopFamily(rawName);
+      const count = counts[n] || 0;
+
+      if (family === "unknown" || !count) continue;
+
+      troop_rows.push({
+        raw_name: rawName,
+        family,
+        count
+      });
+    }
+  }
+
+  // Deduplicate exact duplicates
   const seen = new Set();
   const deduped_rows = troop_rows.filter(row => {
     const key = `${row.raw_name}|${row.family}|${row.count}`;
