@@ -1028,25 +1028,26 @@ db.players[record.player_id].governor = record.governor || null;
     }
 
     function loadSelectedPlayer() {
-      const id = document.getElementById("playerSelect").value;
-      const db = getDb();
-      const rec = db.players[id];
+  const id = document.getElementById("playerSelect").value;
+  const db = getDb();
+  const rec = db.players[id];
 
-      if (!rec) {
-        setStatus("playerListStatus", "Choose a saved player first.", "warn");
-        return;
-      }
+  if (!rec) {
+    setStatus("playerListStatus", "Choose a saved player first.", "warn");
+    return;
+  }
 
-      currentIdentity = rec.identity || null;
-      currentTroops = rec.troops || null;
+  currentIdentity = rec.identity || null;
+  currentTroops = rec.troops || null;
+  currentGovernor = rec.governor || null;
 
-      document.getElementById("identityParsed").value = currentIdentity ? JSON.stringify(currentIdentity, null, 2) : "";
-      document.getElementById("troopParsed").value = currentTroops ? JSON.stringify(currentTroops, null, 2) : "";
-      showCombinedRecord();
+  document.getElementById("identityParsed").value = currentIdentity ? JSON.stringify(currentIdentity, null, 2) : "";
+  document.getElementById("troopParsed").value = currentTroops ? JSON.stringify(currentTroops, null, 2) : "";
+  document.getElementById("govParsed").value = currentGovernor ? JSON.stringify(currentGovernor, null, 2) : "";
+  showCombinedRecord();
 
-      setStatus("playerListStatus", `Loaded player ${id}.`, "ok");
-    }
-
+  setStatus("playerListStatus", `Loaded player ${id}.`, "ok");
+}
     function deleteSelectedPlayer() {
       const id = document.getElementById("playerSelect").value;
       const db = getDb();
