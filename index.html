@@ -331,7 +331,7 @@ function parseIdentityTextV2(nameText, statsText) {
   let powerRaw = null;
   let killsRaw = null;
 
-  // 1) ID: accept either "ID: 123" or just a bare 8-10 digit line
+  // 1) ID
   for (const line of lines) {
     if (!playerId) {
       const m1 = line.match(/ID[:\s|]*(\d{6,12})/i);
@@ -341,7 +341,7 @@ function parseIdentityTextV2(nameText, statsText) {
     }
   }
 
-  // 2) Alliance: tolerate missing first letter, e.g. "liance: ONE"
+  // 2) Alliance
   for (const line of lines) {
     if (!alliance) {
       const m =
@@ -359,7 +359,7 @@ function parseIdentityTextV2(nameText, statsText) {
     }
   }
 
-  // 4) Kills: tolerate missing first letter, e.g. "lls: 3.1M"
+  // 4) Kills
   for (const line of lines) {
     if (!killsRaw) {
       const m =
@@ -369,7 +369,7 @@ function parseIdentityTextV2(nameText, statsText) {
     }
   }
 
-  // 5) Power â€” clean and stable detection
+  // 5) Power
   for (const line of lines) {
     if (/Kills|lls/i.test(line)) continue;
 
@@ -380,20 +380,19 @@ function parseIdentityTextV2(nameText, statsText) {
     }
   }
 
-  // Only fix obvious OCR errors like "422M" or "114M"
-  // Do not touch values that already have a decimal.
+  // Repair common OCR decimal-loss cases:
+  // 422M -> 42.2M
+  // 114M -> 11.4M
   if (powerRaw && /^[0-9]{3,4}M$/i.test(powerRaw) && !powerRaw.includes(".")) {
     const digits = powerRaw.replace(/M/i, "");
-
-    // For common player power values, 3 digits usually means XX.XM
     if (digits.length === 3) {
-      powerRaw = `${digits.slice(0,2)}.${digits.slice(2)}M`; // 422 -> 42.2M
+      powerRaw = `${digits.slice(0,2)}.${digits.slice(2)}M`;
     } else if (digits.length === 4) {
-      powerRaw = `${digits.slice(0,2)}.${digits.slice(2,3)}M`; // 1140 -> 11.4M
+      powerRaw = `${digits.slice(0,2)}.${digits.slice(2,3)}M`;
     }
   }
 
-  // 6) Name: use stats crop first, fallback to name crop
+  // 6) Name: stats crop first
   let candidateName = null;
 
   for (const line of lines) {
@@ -409,6 +408,7 @@ function parseIdentityTextV2(nameText, statsText) {
     }
   }
 
+  // fallback to name crop
   if (!candidateName) {
     const nameLines = rawName
       .split(/\n+/)
@@ -417,7 +417,7 @@ function parseIdentityTextV2(nameText, statsText) {
     candidateName = nameLines[0] || "";
   }
 
-  // fallback: try to recover a tagged name directly from stats text
+  // fallback to tagged name inside stats OCR
   if (!candidateName) {
     const m =
       rawStats.match(/(\[[A-Za-z]+\][A-Za-z0-9_-]+)/) ||
@@ -429,12 +429,12 @@ function parseIdentityTextV2(nameText, statsText) {
     .replace(/[^A-Za-z0-9\[\]_-]/g, "")
     .trim();
 
-  // Fix missing opening bracket
+  // repair missing opening bracket
   if (!candidateName.startsWith("[") && candidateName.includes("]")) {
     candidateName = "[" + candidateName;
   }
 
-  // Fix missing closing bracket
+  // repair missing closing bracket
   if (
     alliance &&
     candidateName &&
@@ -444,7 +444,7 @@ function parseIdentityTextV2(nameText, statsText) {
     candidateName = candidateName.replace("[" + alliance, "[" + alliance + "]");
   }
 
-  // Remove trailing junk (like K)
+  // trim trailing junk like K
   candidateName = candidateName.replace(/[Kk]+$/, "");
 
   if (candidateName.length >= 4) {
