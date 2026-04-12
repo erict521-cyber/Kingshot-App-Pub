@@ -396,20 +396,14 @@ function parseIdentityTextV2(nameText, statsText) {
   let candidateName = null;
 
   for (const line of lines) {
-  if (
-    !/Alliance|liance|Kingdom|ngdom|Kills|lls|ID/i.test(line) &&
-    !/\d{6,12}/.test(line)
-  ) {
-    const cleaned = line.replace(/[^A-Za-z0-9\[\]_-]/g, "").trim();
-
-    const looksBad =
-      /\d/.test(cleaned) ||     // reject names with digits
-      /[MmKk]/.test(cleaned) || // reject power OCR junk
-      cleaned.length < 4;
-
-    if (!looksBad && /[A-Za-z]/.test(cleaned)) {
-      candidateName = cleaned;
-      break;
+    if (
+      !/Alliance|liance|Kingdom|ngdom|Kills|lls|ID/i.test(line) &&
+      !/\d{6,12}/.test(line)
+    ) {
+      const cleaned = line.replace(/[^A-Za-z0-9\[\]_-]/g, "").trim();
+      if (cleaned.length >= 4 && /[A-Za-z]/.test(cleaned)) {
+        candidateName = cleaned;
+        break;
       }
     }
   }
@@ -431,41 +425,35 @@ function parseIdentityTextV2(nameText, statsText) {
     if (m) candidateName = m[1];
   }
 
-candidateName = String(candidateName || "")
+  candidateName = String(candidateName || "")
     .replace(/[^A-Za-z0-9\[\]_-]/g, "")
     .trim();
 
-  // If OCR found "ONE]thallay" -> "[ONE]thallay"
-  if (!candidateName.startsWith("[") && candidateName.includes("]")) {
-    candidateName = "[" + candidateName;
+  // Remove alliance tag from the front of the name
+  // [ONE]TitsThisWay -> TitsThisWay
+  let tagMatch = candidateName.match(/^\[([A-Za-z0-9_-]+)\](.+)$/);
+  if (tagMatch) {
+    candidateName = tagMatch[2];
   }
 
-  // If OCR found "ONEisThsWay" and alliance is known -> "[ONE]isThsWay"
-  if (alliance && candidateName && !candidateName.startsWith("[")) {
-    const startsWithAlliance = new RegExp("^" + alliance, "i");
-    if (startsWithAlliance.test(candidateName)) {
-      candidateName = "[" + alliance + "]" + candidateName.slice(alliance.length);
-    }
+  // Also handle missing opening bracket case: ONE]TitsThisWay -> TitsThisWay
+  let looseTagMatch = candidateName.match(/^([A-Za-z0-9_-]+)\](.+)$/);
+  if (looseTagMatch) {
+    candidateName = looseTagMatch[2];
   }
 
-  // Fix missing closing bracket
-  if (
-    alliance &&
-    candidateName &&
-    candidateName.startsWith("[" + alliance) &&
-    !candidateName.startsWith("[" + alliance + "]")
-  ) {
-    candidateName = candidateName.replace("[" + alliance, "[" + alliance + "]");
+  // Trim obvious trailing OCR junk
+  candidateName = candidateName.replace(/[KkEe]+$/, "");
+
+  // Fix stray OCR letter at start of name after tag removal
+  // lAglaia -> Aglaia
+  if (/^[lI][A-Z]/.test(candidateName)) {
+    candidateName = candidateName.slice(1);
   }
 
-  // Remove obvious leading junk after the alliance tag
-  if (alliance) {
-    const strayLowerAfterTag = new RegExp("^\\[" + alliance + "\\][lI]([A-Z])");
-    candidateName = candidateName.replace(strayLowerAfterTag, "[" + alliance + "]$1");
+  if (candidateName.length >= 3 && /[A-Za-z]/.test(candidateName)) {
+    playerName = candidateName;
   }
-
-  // Trim obvious trailing junk
-  candidateName = candidateName.replace(/[EKek]+$/, "");
 
   const rec = {
     screen_type: "player_identity",
