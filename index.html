@@ -1107,6 +1107,43 @@ const statsCanvas = cropCanvas(img, 0.33, 0.70, 0.56, 0.23);
   }
 }
 
+async function readGovernor() {
+  const files = Array.from(document.getElementById("govFiles").files || []);
+  if (!files.length) {
+    setStatus("govStatus", "Choose governor screenshots first.", "warn");
+    return;
+  }
+
+  try {
+    setStatus("govStatus", `Reading ${files.length} governor screenshot(s)...`);
+
+    let mergedText = "";
+
+    for (const file of files) {
+      const text = await ocr(file);
+      mergedText += `\n--- ${file.name} ---\n${text}\n`;
+    }
+
+    document.getElementById("govOCR").value = mergedText;
+
+    currentGovernor = parseGovernorText(mergedText);
+    document.getElementById("govParsed").value = JSON.stringify(currentGovernor, null, 2);
+    showCombinedRecord();
+
+    const flags = currentGovernor.review_flags || [];
+    setStatus(
+      "govStatus",
+      flags.length
+        ? `Governor parsed with warnings: ${flags.join("; ")}`
+        : "Governor parsed successfully.",
+      flags.length ? "warn" : "ok"
+    );
+  } catch (err) {
+    console.error(err);
+    setStatus("govStatus", "Governor OCR failed.", "warn");
+  }
+}
+
     function buildCombinedRecord() {
   const playerId = currentIdentity?.player_id?.value || "";
   return {
