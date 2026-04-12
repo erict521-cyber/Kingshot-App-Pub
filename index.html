@@ -537,28 +537,51 @@ function getTroopFamily(name) {
 
   const troop_rows = [];
 
-  function splitTwoTroopNames(line) {
-    const matches = [...line.matchAll(/([A-Za-z]+(?:\s+[A-Za-z]+)*\s+(?:Infantry|Cavalry|Archer|Archers|Lancer|Marksman))/gi)];
-    return matches.map(m => m[1].trim());
+  function splitTroopNames(line) {
+    // Limit descriptor length so one merged line does not swallow both troop names
+    const regex = /([A-Za-z]+(?:\s+[A-Za-z]+){0,2}\s+(?:Infantry|Cavalry|Archer|Archers|Lancer|Marksman))/gi;
+    const matches = [...line.matchAll(regex)].map(m => m[1].trim());
+
+    return matches.map(name => {
+      // remove stray single-letter OCR junk at start: "g Hardy Cavalry" -> "Hardy Cavalry"
+      return name.replace(/^[A-Za-z]\s+/, "").trim();
+    });
   }
 
-  function extractCounts(line) {
-    const matches = line.match(/\d[\d,]*/g) || [];
-    return matches.map(cleanInt).filter(n => n > 0);
+  function extractCounts(line, expectedCount) {
+    let nums = (line.match(/\d[\d,]*/g) || []).map(cleanInt).filter(n => n > 0);
+
+    // Common OCR noise: icon marker creates tiny numbers like 2 between real troop counts
+    // If we have extra numbers, drop tiny noise first.
+    if (nums.length > expectedCount) {
+      const bigNums = nums.filter(n => n >= 10);
+      if (bigNums.length >= expectedCount) nums = bigNums;
+    }
+
+    // If still too many, keep the first N in left-to-right order
+    if (nums.length > expectedCount) {
+      nums = nums.slice(0, expectedCount);
+    }
+
+    return nums;
   }
 
   for (let i = 0; i < lines.length; i++) {
-    const line = lines[i];
-    const names = splitTwoTroopNames(line);
+    const nameLine = lines[i];
+    const names = splitTroopNames(nameLine);
 
     if (!names.length) continue;
 
     let counts = [];
     if (i + 1 < lines.length) {
-      counts = extractCounts(lines[i + 1]);
+      counts = extractCounts(lines[i + 1], names.length);
     }
 
-    // Pair left/right names with left/right counts
+    // fallback: sometimes counts land on same line
+    if (!counts.length) {
+      counts = extractCounts(nameLine, names.length);
+    }
+
     for (let n = 0; n < names.length; n++) {
       const rawName = names[n];
       const family = getTroopFamily(rawName);
