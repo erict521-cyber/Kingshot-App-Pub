@@ -369,17 +369,16 @@ function parseIdentityTextV2(nameText, statsText) {
     }
   }
 
-  // 5) Power: first K/M number that is not already kills
-  const kmVals = rawStats.match(/\d+(?:\.\d+)?\s*[MK]/gi) || [];
-  if (kmVals.length) {
-    const cleaned = kmVals.map(v => v.replace(/\s+/g, ""));
-    if (killsRaw) {
-      powerRaw = cleaned.find(v => v.toUpperCase() !== killsRaw.toUpperCase()) || cleaned[0];
-    } else {
-      powerRaw = cleaned[0];
-    }
-  }
+// Prefer the first standalone K/M value that is NOT on a kills line
+for (const line of lines) {
+  if (/Kills|lls/i.test(line)) continue;
 
+  const m = line.match(/(\d+(?:\.\d+)?)\s*([MK])/i);
+  if (m) {
+    powerRaw = `${m[1]}${m[2].toUpperCase()}`;
+    break;
+  }
+}
   // 6) Name: use stats crop first, fallback to name crop
   // Expected examples:
   // "ONE]thallay ("
