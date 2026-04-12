@@ -510,6 +510,125 @@ function parseIdentityTextV2(nameText, statsText) {
   return rec;
 }
 
+
+function parseTroopColumns(leftText, rightText) {
+  function parseOneColumn(text) {
+    const lines = String(text || "")
+      .split(/\n+/)
+      .map(l => cleanText(l))
+      .filter(Boolean);
+
+    const rows = [];
+
+    function cleanTroopLine(line) {
+      return String(line || "")
+        .replace(/[@%>{}]/g, " ")
+        .replace(/\b[Aa]o\b/g, " ")
+        .replace(/[^A-Za-z0-9 \-]/g, " ")
+        .replace(/\s+/g, " ")
+        .trim();
+    }
+
+    function extractCounts(line) {
+      return (String(line || "").match(/\d[\d,]*/g) || [])
+        .map(cleanInt)
+        .filter(n => n >= 10);
+    }
+
+    for (let i = 0; i < lines.length; i++) {
+      const cleaned = cleanTroopLine(lines[i]);
+      const family = getTroopFamily(cleaned);
+
+      if (family === "unknown") continue;
+
+      let rawName = cleaned;
+      let count = 0;
+
+      // same-line count
+      const sameLine = cleaned.match(/(.+?)\s+(\d[\d,]*)$/);
+      if (sameLine) {
+        rawName = sameLine[1].trim();
+        count = cleanInt(sameLine[2]);
+      }
+
+      // next line count
+      if (!count && i + 1 < lines.length) {
+        const nums = extractCounts(lines[i + 1]);
+        if (nums.length) count = nums[0];
+      }
+
+      // one more line down fallback
+      if (!count && i + 2 < lines.length) {
+        const nums = extractCounts(lines[i + 2]);
+        if (nums.length) count = nums[0];
+      }
+
+      if (!count) continue;
+
+      rows.push({
+        raw_name: rawName,
+        family,
+        count
+      });
+    }
+
+    return rows;
+  }
+
+  const troop_rows = [
+    ...parseOneColumn(leftText),
+    ...parseOneColumn(rightText)
+  ];
+
+  // dedupe exact duplicates
+  const seen = new Set();
+  const deduped_rows = troop_rows.filter(row => {
+    const key = `${row.raw_name}|${row.family}|${row.count}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+
+  const troop_totals = {
+    infantry: 0,
+    cavalry: 0,
+    archers: 0,
+    total: 0
+  };
+
+  for (const row of deduped_rows) {
+    if (troop_totals[row.family] !== undefined) {
+      troop_totals[row.family] += row.count;
+    }
+  }
+
+  troop_totals.total =
+    troop_totals.infantry +
+    troop_totals.cavalry +
+    troop_totals.archers;
+
+  const rec = {
+    screen_type: "troops_preview",
+    troop_rows: deduped_rows,
+    troop_totals,
+    captured_at: nowIso(),
+    confidence: {
+      overall: deduped_rows.length ? 0.94 : 0.0
+    },
+    review_flags: []
+  };
+
+  if (!deduped_rows.length) rec.review_flags.push("No troop rows detected");
+  if (!troop_totals.infantry) rec.review_flags.push("No infantry rows detected");
+  if (!troop_totals.cavalry) rec.review_flags.push("No cavalry rows detected");
+  if (!troop_totals.archers) rec.review_flags.push("No archer rows detected");
+
+  if (rec.review_flags.length) {
+    rec.confidence.overall = 0.72;
+  }
+
+  return rec;
+}
 function getTroopFamily(name) {
   const n = String(name || "")
     .replace(/^[^A-Za-z]+/, "")
