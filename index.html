@@ -543,6 +543,23 @@ function parsePercentValue(raw) {
   return parseFloat(matches[matches.length - 1]);
 }
 
+function parseBigNumberValue(raw) {
+  const line = String(raw || "");
+
+  // First try normal comma-formatted number
+  const commaNum = line.match(/\d{1,3}(?:,\d{3})+/);
+  if (commaNum) {
+    return cleanInt(commaNum[0]);
+  }
+
+  // If OCR split a large number into chunks like "2,994, 614"
+  const groups = line.match(/\d+/g) || [];
+  if (!groups.length) return null;
+
+  // Join all digit groups together for integer-style stats
+  return cleanInt(groups.join(""));
+}
+
 function parseGovernorText(text) {
   const raw = String(text || "");
   const lines = raw
