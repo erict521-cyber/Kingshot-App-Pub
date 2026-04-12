@@ -586,34 +586,53 @@ async function ocrCanvas(canvas, whitelist = "") {
   return result?.data?.text || "";
 }
     async function readIdentity() {
-      const file = document.getElementById("identityFile").files[0];
-      if (!file) {
-        setStatus("identityStatus", "Choose an identity screenshot first.", "warn");
-        return;
-      }
+  const file = document.getElementById("identityFile").files[0];
+  if (!file) {
+    setStatus("identityStatus", "Choose an identity screenshot first.", "warn");
+    return;
+  }
 
-      try {
-        setStatus("identityStatus", `Reading ${file.name}...`);
-        const text = await ocr(file);
-        document.getElementById("identityOCR").value = text;
+  try {
+    setStatus("identityStatus", `Reading ${file.name}...`);
 
-        currentIdentity = parseIdentityText(text);
-        document.getElementById("identityParsed").value = JSON.stringify(currentIdentity, null, 2);
-        showCombinedRecord();
+    const img = await loadImageFromFile(file);
 
-        const flags = currentIdentity.review_flags || [];
-        setStatus(
-          "identityStatus",
-          flags.length
-            ? `Identity parsed with warnings: ${flags.join("; ")}`
-            : "Identity parsed successfully.",
-          flags.length ? "warn" : "ok"
-        );
-      } catch (err) {
-        console.error(err);
-        setStatus("identityStatus", "Identity OCR failed.", "warn");
-      }
-    }
+    // Crop 1: name bar
+    const nameCanvas = cropCanvas(img, 0.34, 0.67, 0.56, 0.07);
+
+    // Crop 2: info block with ID, power, kills, alliance, kingdom
+    const statsCanvas = cropCanvas(img, 0.42, 0.73, 0.44, 0.18);
+
+    const nameText = await ocrCanvas(
+      nameCanvas,
+      "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789[]-_"
+    );
+
+    const statsText = await ocrCanvas(
+      statsCanvas,
+      "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789#:-.,MKmk "
+    );
+
+    const combined = `--- NAME OCR ---\n${nameText}\n\n--- STATS OCR ---\n${statsText}`;
+    document.getElementById("identityOCR").value = combined;
+
+    currentIdentity = parseIdentityTextV2(nameText, statsText);
+    document.getElementById("identityParsed").value = JSON.stringify(currentIdentity, null, 2);
+    showCombinedRecord();
+
+    const flags = currentIdentity.review_flags || [];
+    setStatus(
+      "identityStatus",
+      flags.length
+        ? `Identity parsed with warnings: ${flags.join("; ")}`
+        : "Identity parsed successfully.",
+      flags.length ? "warn" : "ok"
+    );
+  } catch (err) {
+    console.error(err);
+    setStatus("identityStatus", "Identity OCR failed.", "warn");
+  }
+}
 
     async function readTroops() {
       const file = document.getElementById("troopFile").files[0];
