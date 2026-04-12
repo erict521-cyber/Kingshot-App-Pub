@@ -529,6 +529,176 @@ function parseIdentityTextV2(nameText, statsText) {
   return rec;
 }
 
+function normalizeGovernorLabel(label) {
+  return String(label || "")
+    .toLowerCase()
+    .replace(/[’']/g, "'")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function parsePercentValue(raw) {
+  const m = String(raw || "").match(/-?\d+(?:\.\d+)?/);
+  return m ? parseFloat(m[0]) : null;
+}
+
+function parseGovernorText(text) {
+  const raw = String(text || "");
+  const lines = raw
+    .split(/\n+/)
+    .map(l => cleanText(l))
+    .filter(Boolean);
+
+  const rec = {
+    screen_type: "bonus_overview_scrollset",
+    power: {},
+    battle: {},
+    military: {},
+    troop_stats: {
+      infantry: {},
+      cavalry: {},
+      archers: {}
+    },
+    city_defense: {},
+    resources: {},
+    growth: {},
+    captured_at: nowIso(),
+    confidence: {
+      overall: 0
+    },
+    review_flags: []
+  };
+
+  const labelMap = [
+    ["troops power", ["power", "troops"]],
+    ["building power", ["power", "building"]],
+    ["tech power", ["power", "tech"]],
+    ["governor gear power", ["power", "gear"]],
+    ["hero power", ["power", "hero"]],
+    ["pet power", ["power", "pet"]],
+
+    ["battle victories", ["battle", "victories"]],
+    ["battle losses", ["battle", "losses"]],
+    ["attacker victory", ["battle", "attacker_victory"]],
+    ["attacker defeat", ["battle", "attacker_defeat"]],
+    ["defensive victory", ["battle", "defensive_victory"]],
+    ["defensive defeat", ["battle", "defensive_defeat"]],
+    ["win ratio", ["battle", "win_ratio"]],
+    ["successful scouts", ["battle", "successful_scouts"]],
+    ["kills", ["battle", "kills"]],
+    ["losses", ["battle", "losses_total"]],
+
+    ["march queue", ["military", "march_queue"]],
+    ["deployment capacity", ["military", "deployment_capacity"]],
+    ["march speed up", ["military", "march_speed_up"]],
+    ["training capacity", ["military", "training_capacity"]],
+    ["training speed", ["military", "training_speed"]],
+    ["healing speed", ["military", "healing_speed"]],
+    ["squads attack", ["military", "squad_attack"]],
+    ["squads defense", ["military", "squad_defense"]],
+    ["squads lethality", ["military", "squad_lethality"]],
+    ["squads health", ["military", "squad_health"]],
+
+    ["infantry attack", ["troop_stats", "infantry", "attack"]],
+    ["infantry defense", ["troop_stats", "infantry", "defense"]],
+    ["infantry health", ["troop_stats", "infantry", "health"]],
+    ["infantry lethality", ["troop_stats", "infantry", "lethality"]],
+
+    ["cavalry attack", ["troop_stats", "cavalry", "attack"]],
+    ["cavalry defense", ["troop_stats", "cavalry", "defense"]],
+    ["cavalry health", ["troop_stats", "cavalry", "health"]],
+    ["cavalry lethality", ["troop_stats", "cavalry", "lethality"]],
+
+    ["archer attack", ["troop_stats", "archers", "attack"]],
+    ["archer defense", ["troop_stats", "archers", "defense"]],
+    ["archer health", ["troop_stats", "archers", "health"]],
+    ["archer lethality", ["troop_stats", "archers", "lethality"]],
+
+    ["defender squads attack", ["city_defense", "defender_attack"]],
+    ["defender squads defense", ["city_defense", "defender_defense"]],
+    ["territory defender attack", ["city_defense", "territory_attack"]],
+    ["territory defender defense", ["city_defense", "territory_defense"]],
+
+    ["bread gathering speed", ["resources", "bread"]],
+    ["wood gathering speed", ["resources", "wood"]],
+    ["stone gathering speed", ["resources", "stone"]],
+    ["iron mining speed", ["resources", "iron"]],
+
+    ["construction speed", ["growth", "construction_speed"]],
+    ["research speed", ["growth", "research_speed"]],
+    ["hunting march speed", ["growth", "hunting_march_speed"]]
+  ];
+
+  function setNested(obj, path, value) {
+    let cur = obj;
+    for (let i = 0; i < path.length - 1; i++) {
+      cur = cur[path[i]];
+    }
+    const key = path[path.length - 1];
+    if (cur[key] === undefined || cur[key] === null) {
+      cur[key] = value;
+    }
+  }
+
+  function getNested(obj, path) {
+    let cur = obj;
+    for (const p of path) {
+      if (cur == null || !(p in cur)) return undefined;
+      cur = cur[p];
+    }
+    return cur;
+  }
+
+  for (const line of lines) {
+    const normalized = normalizeGovernorLabel(line);
+
+    for (const [label, path] of labelMap) {
+      const labelNorm = normalizeGovernorLabel(label);
+
+      if (!normalized.includes(labelNorm)) continue;
+      if (getNested(rec, path) !== undefined) continue;
+
+      let value = null;
+
+      if (labelNorm === "win ratio" ||
+          labelNorm.includes("attack") ||
+          labelNorm.includes("defense") ||
+          labelNorm.includes("health") ||
+          labelNorm.includes("lethality") ||
+          labelNorm.includes("speed")) {
+        value = parsePercentValue(line);
+      } else {
+        const nums = line.match(/\d[\d,]*/g) || [];
+        if (nums.length) value = cleanInt(nums[nums.length - 1]);
+      }
+
+      if (value !== null && value !== undefined) {
+        setNested(rec, path, value);
+      }
+    }
+  }
+
+  const foundCount =
+    Object.keys(rec.power).length +
+    Object.keys(rec.battle).length +
+    Object.keys(rec.military).length +
+    Object.keys(rec.troop_stats.infantry).length +
+    Object.keys(rec.troop_stats.cavalry).length +
+    Object.keys(rec.troop_stats.archers).length +
+    Object.keys(rec.city_defense).length +
+    Object.keys(rec.resources).length +
+    Object.keys(rec.growth).length;
+
+  if (!foundCount) rec.review_flags.push("No governor stats detected");
+  if (!rec.military.deployment_capacity) rec.review_flags.push("Missing deployment capacity");
+  if (!rec.troop_stats.infantry.attack) rec.review_flags.push("Missing infantry stats");
+  if (!rec.troop_stats.cavalry.attack) rec.review_flags.push("Missing cavalry stats");
+  if (!rec.troop_stats.archers.attack) rec.review_flags.push("Missing archer stats");
+
+  rec.confidence.overall = foundCount ? (rec.review_flags.length ? 0.82 : 0.96) : 0.0;
+
+  return rec;
+}
 
 function parseTroopColumns(leftText, rightText) {
   function parseOneColumn(text) {
