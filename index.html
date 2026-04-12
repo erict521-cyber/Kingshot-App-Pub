@@ -720,34 +720,44 @@ const statsCanvas = cropCanvas(img, 0.33, 0.70, 0.56, 0.23);
 }
 
     async function readTroops() {
-      const file = document.getElementById("troopFile").files[0];
-      if (!file) {
-        setStatus("troopStatus", "Choose a troop screenshot first.", "warn");
-        return;
-      }
+  const file = document.getElementById("troopFile").files[0];
+  if (!file) {
+    setStatus("troopStatus", "Choose a troop screenshot first.", "warn");
+    return;
+  }
 
-      try {
-        setStatus("troopStatus", `Reading ${file.name}...`);
-        const text = await ocr(file);
-        document.getElementById("troopOCR").value = text;
+  try {
+    setStatus("troopStatus", `Reading ${file.name}...`);
 
-        currentTroops = parseTroopText(text);
-        document.getElementById("troopParsed").value = JSON.stringify(currentTroops, null, 2);
-        showCombinedRecord();
+    const img = await loadImageFromFile(file);
 
-        const flags = currentTroops.review_flags || [];
-        setStatus(
-          "troopStatus",
-          flags.length
-            ? `Troops parsed with warnings: ${flags.join("; ")}`
-            : "Troops parsed successfully.",
-          flags.length ? "warn" : "ok"
-        );
-      } catch (err) {
-        console.error(err);
-        setStatus("troopStatus", "Troop OCR failed.", "warn");
-      }
-    }
+    // Focus on troop list area
+    const troopCanvas = cropCanvas(img, 0.10, 0.18, 0.80, 0.58);
+
+    const text = await ocrCanvas(
+      troopCanvas,
+      "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789, -"
+    );
+
+    document.getElementById("troopOCR").value = text;
+
+    currentTroops = parseTroopText(text);
+    document.getElementById("troopParsed").value = JSON.stringify(currentTroops, null, 2);
+    showCombinedRecord();
+
+    const flags = currentTroops.review_flags || [];
+    setStatus(
+      "troopStatus",
+      flags.length
+        ? `Troops parsed with warnings: ${flags.join("; ")}`
+        : "Troops parsed successfully.",
+      flags.length ? "warn" : "ok"
+    );
+  } catch (err) {
+    console.error(err);
+    setStatus("troopStatus", "Troop OCR failed.", "warn");
+  }
+}
 
     function buildCombinedRecord() {
       const playerId = currentIdentity?.player_id?.value || "";
