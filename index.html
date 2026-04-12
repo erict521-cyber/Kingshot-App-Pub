@@ -450,6 +450,92 @@
   return rec;
 }
 
+function parseIdentityTextV2(nameText, statsText) {
+  const rawName = String(nameText || "").split(/\n+/).map(s => s.trim()).filter(Boolean)[0] || "";
+  const rawStats = String(statsText || "");
+
+  let playerName = rawName
+    .replace(/[^A-Za-z0-9\[\]_-]/g, "")
+    .replace(/^Q+/, "")
+    .replace(/^o+/, "")
+    .trim();
+
+  const playerId = (rawStats.match(/ID[:\s]*(\d{6,12})/i) || [])[1] || "";
+  const alliance = (rawStats.match(/Alliance[:\s]*([A-Za-z0-9_-]+)/i) || [])[1] || "";
+  const kingdom = (rawStats.match(/#\s*(\d{3,5})/) || [])[1] || "";
+
+  let killsRaw = (rawStats.match(/Kills[:\s]*([\d.,MK]+)/i) || [])[1] || "";
+  let powerRaw = "";
+
+  // first standalone K/M value in stats block is usually power
+  const kmVals = rawStats.match(/\d+(?:\.\d+)?\s*[MK]/gi) || [];
+  if (kmVals.length) {
+    powerRaw = kmVals[0].replace(/\s+/g, "");
+  }
+
+  // normalize name with alliance tag if possible
+  if (alliance && playerName) {
+    const tagRegex = new RegExp("\\[" + alliance + "\\]", "i");
+    if (!tagRegex.test(playerName)) {
+      const stripped = playerName.replace(/^\[[^\]]*\]/, "").replace(new RegExp("^" + alliance, "i"), "");
+      playerName = `[${alliance}]${stripped}`;
+    }
+  }
+
+  // reject obvious junk names
+  if (!playerName || playerName.length < 4) {
+    playerName = null;
+  }
+
+  const rec = {
+    screen_type: "player_identity",
+    player_id: {
+      value: playerId || null,
+      confidence: playerId ? 0.99 : 0.0,
+      source: "identity_upload"
+    },
+    player_name: {
+      value: playerName,
+      confidence: playerName ? 0.96 : 0.0
+    },
+    alliance_name: {
+      value: alliance || null,
+      confidence: alliance ? 0.98 : 0.0
+    },
+    kingdom: {
+      value: kingdom || null,
+      confidence: kingdom ? 0.99 : 0.0
+    },
+    power: {
+      value: powerRaw ? parseShorthandNumber(powerRaw) : null,
+      raw: powerRaw || null,
+      confidence: powerRaw ? 0.9 : 0.0,
+      source: "observed"
+    },
+    kills: {
+      value: killsRaw ? parseShorthandNumber(killsRaw) : null,
+      raw: killsRaw || null,
+      confidence: killsRaw ? 0.95 : 0.0,
+      source: "observed"
+    },
+    captured_at: nowIso(),
+    confidence: {
+      overall: 0
+    },
+    review_flags: []
+  };
+
+  if (!rec.player_id.value) rec.review_flags.push("Missing player_id");
+  if (!rec.player_name.value) rec.review_flags.push("Missing player_name");
+  if (!rec.alliance_name.value) rec.review_flags.push("Missing alliance_name");
+  if (!rec.kingdom.value) rec.review_flags.push("Missing kingdom");
+  if (!rec.power.value) rec.review_flags.push("Missing power");
+  if (!rec.kills.value) rec.review_flags.push("Missing kills");
+
+  rec.confidence.overall = rec.review_flags.length ? 0.75 : 0.98;
+  return rec;
+}
+
     function getTroopFamily(name) {
       const n = String(name || "").toLowerCase();
 
