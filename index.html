@@ -396,14 +396,20 @@ function parseIdentityTextV2(nameText, statsText) {
   let candidateName = null;
 
   for (const line of lines) {
-    if (
-      !/Alliance|liance|Kingdom|ngdom|Kills|lls|ID/i.test(line) &&
-      !/\d{6,12}/.test(line)
-    ) {
-      const cleaned = line.replace(/[^A-Za-z0-9\[\]_-]/g, "").trim();
-      if (cleaned.length >= 4 && /[A-Za-z]/.test(cleaned)) {
-        candidateName = cleaned;
-        break;
+  if (
+    !/Alliance|liance|Kingdom|ngdom|Kills|lls|ID/i.test(line) &&
+    !/\d{6,12}/.test(line)
+  ) {
+    const cleaned = line.replace(/[^A-Za-z0-9\[\]_-]/g, "").trim();
+
+    const looksBad =
+      /\d/.test(cleaned) ||     // reject names with digits
+      /[MmKk]/.test(cleaned) || // reject power OCR junk
+      cleaned.length < 4;
+
+    if (!looksBad && /[A-Za-z]/.test(cleaned)) {
+      candidateName = cleaned;
+      break;
       }
     }
   }
@@ -450,6 +456,13 @@ function parseIdentityTextV2(nameText, statsText) {
   if (candidateName.length >= 4) {
     playerName = candidateName;
   }
+
+// fix stray OCR letter after alliance tag
+// example: [All]lAglaia -> [All]Aglaia
+if (alliance) {
+  const strayTag = new RegExp("^\\[" + alliance + "\\]l([A-Z])");
+  candidateName = candidateName.replace(strayTag, "[" + alliance + "]$1");
+}
 
   const rec = {
     screen_type: "player_identity",
@@ -651,7 +664,7 @@ async function ocrCanvas(canvas, whitelist = "") {
     const nameCanvas = cropCanvas(img, 0.28, 0.645, 0.64, 0.095);
 
     // Crop 2: info block with ID, power, kills, alliance, kingdom
-    const statsCanvas = cropCanvas(img, 0.35, 0.72, 0.53, 0.21);
+    const statsCanvas = cropCanvas(img, 0.32, 0.72, 0.56, 0.21);
 
     const nameText = await ocrCanvas(
       nameCanvas,
