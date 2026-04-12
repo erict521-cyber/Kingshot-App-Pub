@@ -577,6 +577,20 @@ function parseBigNumberValue(raw) {
   return cleanInt(groups.join(""));
 }
 
+function maybeFlagSuspiciousTroopStat(labelNorm, value, rec) {
+  if (value == null) return;
+
+  const troopStatLabels = [
+    "infantry attack", "infantry defense", "infantry health", "infantry lethality",
+    "cavalry attack", "cavalry defense", "cavalry health", "cavalry lethality",
+    "archer attack", "archer defense", "archer health", "archer lethality"
+  ];
+
+  if (troopStatLabels.includes(labelNorm) && value >= 10 && value < 20) {
+    rec.review_flags.push(`Suspicious ${labelNorm}: ${value}`);
+  }
+}
+
 function parseGovernorText(text) {
   const raw = String(text || "");
   const lines = raw
