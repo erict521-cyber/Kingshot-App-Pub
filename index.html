@@ -317,85 +317,102 @@
     }
 
     function parseIdentityText(text) {
-      const raw = String(text || "");
-      const lines = raw
-        .split(/\n+/)
-        .map(l => l.trim())
-        .filter(Boolean);
+  const raw = String(text || "");
+  const lines = raw
+    .split(/\n+/)
+    .map(l => l.trim())
+    .filter(Boolean);
 
-      let playerId = "";
-      let playerName = "";
+  let playerId = "";
+  let playerName = "";
+  let alliance = "";
+  let kingdom = "";
+  let powerRaw = "";
+  let killsRaw = "";
 
-      for (let i = 0; i < lines.length; i++) {
-        if (/ID[:\s]*\d+/i.test(lines[i])) {
-          playerId = (lines[i].match(/(\d{6,12})/) || [])[1] || "";
-          playerName = lines[i - 1] || "";
-          break;
-        }
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+
+    if (!playerId && /ID[:\s]*\d+/i.test(line)) {
+      playerId = (line.match(/(\d{6,12})/) || [])[1] || "";
+      if (i > 0) {
+        playerName = lines[i - 1]
+          .replace(/[^a-zA-Z0-9\[\]\-_]/g, "")
+          .trim();
       }
-
-      playerName = playerName.replace(/[^a-zA-Z0-9\[\]\-_]/g, "");
-
-      const alliance = (raw.match(/Alliance[:\s]*([A-Za-z0-9_\-\[\]]{1,20})/i) || [])[1] || "";
-      const kingdom = (raw.match(/#\s*(\d{3,5})/) || [])[1] || "";
-
-      const killsRaw = (raw.match(/Kills[:\s]*([\d.,MK]+)/i) || [])[1] || "";
-      const powerMatch = raw.match(/Power[:\s]*([\d.,MK]+)/i);
-      let powerRaw = powerMatch ? powerMatch[1] : "";
-
-      if (!powerRaw) {
-        const fallbackM = raw.match(/(\d+(?:\.\d+)?)\s*M/i);
-        if (fallbackM) powerRaw = fallbackM[1] + "M";
-      }
-
-      const rec = {
-        screen_type: "player_identity",
-        player_id: {
-          value: playerId,
-          confidence: playerId ? 0.99 : 0.0,
-          source: "identity_upload"
-        },
-        player_name: {
-          value: playerName,
-          confidence: playerName ? 0.9 : 0.0
-        },
-        alliance_name: {
-          value: cleanText(alliance),
-          confidence: alliance ? 0.98 : 0.0
-        },
-        kingdom: {
-          value: kingdom || null,
-          confidence: kingdom ? 0.99 : 0.0
-        },
-        power: {
-          value: powerRaw ? parseShorthandNumber(powerRaw) : null,
-          raw: powerRaw || null,
-          confidence: powerRaw ? 0.9 : 0.0,
-          source: "observed"
-        },
-        kills: {
-          value: killsRaw ? parseShorthandNumber(killsRaw) : null,
-          raw: killsRaw || null,
-          confidence: killsRaw ? 0.95 : 0.0,
-          source: "observed"
-        },
-        captured_at: nowIso(),
-        confidence: {
-          overall: 0
-        },
-        review_flags: []
-      };
-
-      if (!rec.player_id.value) rec.review_flags.push("Missing player_id");
-      if (!rec.player_name.value) rec.review_flags.push("Missing player_name");
-      if (!rec.alliance_name.value) rec.review_flags.push("Missing alliance_name");
-      if (!rec.kingdom.value) rec.review_flags.push("Missing kingdom");
-      if (!rec.power.value) rec.review_flags.push("Missing power");
-      if (rec.kills.value === null) rec.review_flags.push("Missing kills");
-
-      rec.confidence.overall = rec.review_flags.length ? 0.72 : 0.97;
-      return rec;
     }
+
+    if (!alliance && /Alliance[:\s]*/i.test(line)) {
+      alliance = (line.match(/Alliance[:\s]*([A-Za-z0-9_\-\[\]]{1,20})/i) || [])[1] || "";
+    }
+
+    if (!kingdom && /#\s*\d{3,5}/.test(line)) {
+      kingdom = (line.match(/#\s*(\d{3,5})/) || [])[1] || "";
+    }
+
+    if (!killsRaw && /Kills[:\s]*/i.test(line)) {
+      killsRaw = (line.match(/Kills[:\s]*([\d.,MK]+)/i) || [])[1] || "";
+    }
+
+    if (!powerRaw && /Power[:\s]*/i.test(line)) {
+      powerRaw = (line.match(/Power[:\s]*([\d.,MK]+)/i) || [])[1] || "";
+    }
+  }
+
+  // fallback: first M-value is usually power if Power: failed
+  if (!powerRaw) {
+    const mVals = raw.match(/\d+(?:\.\d+)?\s*[MK]/gi) || [];
+    if (mVals.length) powerRaw = mVals[0].replace(/\s+/g, "");
+  }
+
+  const rec = {
+    screen_type: "player_identity",
+    player_id: {
+      value: playerId,
+      confidence: playerId ? 0.99 : 0.0,
+      source: "identity_upload"
+    },
+    player_name: {
+      value: playerName,
+      confidence: playerName && playerName.length > 2 ? 0.95 : 0.0
+    },
+    alliance_name: {
+      value: cleanText(alliance),
+      confidence: alliance ? 0.98 : 0.0
+    },
+    kingdom: {
+      value: kingdom || null,
+      confidence: kingdom ? 0.99 : 0.0
+    },
+    power: {
+      value: powerRaw ? parseShorthandNumber(powerRaw) : null,
+      raw: powerRaw || null,
+      confidence: powerRaw ? 0.9 : 0.0,
+      source: "observed"
+    },
+    kills: {
+      value: killsRaw ? parseShorthandNumber(killsRaw) : null,
+      raw: killsRaw || null,
+      confidence: killsRaw ? 0.95 : 0.0,
+      source: "observed"
+    },
+    captured_at: nowIso(),
+    confidence: {
+      overall: 0
+    },
+    review_flags: []
+  };
+
+  if (!rec.player_id.value) rec.review_flags.push("Missing player_id");
+  if (!rec.player_name.value) rec.review_flags.push("Missing player_name");
+  if (!rec.alliance_name.value) rec.review_flags.push("Missing alliance_name");
+  if (!rec.kingdom.value) rec.review_flags.push("Missing kingdom");
+  if (!rec.power.value) rec.review_flags.push("Missing power");
+  if (!rec.kills.value) rec.review_flags.push("Missing kills");
+
+  rec.confidence.overall = rec.review_flags.length ? 0.72 : 0.97;
+  return rec;
+}
 
     function getTroopFamily(name) {
       const n = String(name || "").toLowerCase();
