@@ -538,15 +538,23 @@ function getTroopFamily(name) {
   const troop_rows = [];
 
   function splitTroopNames(line) {
-    // Limit descriptor length so one merged line does not swallow both troop names
-    const regex = /([A-Za-z]+(?:\s+[A-Za-z]+){0,2}\s+(?:Infantry|Cavalry|Archer|Archers|Lancer|Marksman))/gi;
-    const matches = [...line.matchAll(regex)].map(m => m[1].trim());
+  const cleanedLine = String(line || "")
+    .replace(/[^A-Za-z0-9 \-]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
 
-    return matches.map(name => {
-      // remove stray single-letter OCR junk at start: "g Hardy Cavalry" -> "Hardy Cavalry"
-      return name.replace(/^[A-Za-z]\s+/, "").trim();
-    });
-  }
+  const familyWords = "(?:Infantry|Cavalry|Archer|Archers|Lancer|Marksman)";
+  const regex = new RegExp(`([A-Za-z]+(?:\\s+[A-Za-z]+){0,3}\\s+${familyWords})`, "gi");
+
+  const matches = [...cleanedLine.matchAll(regex)].map(m => m[1].trim());
+
+  return matches.map(name =>
+    name
+      .replace(/^[A-Za-z]\s+/, "")   // strip stray single-letter prefix
+      .replace(/\b(?:y|g|h)\s+/i, "") // strip common OCR junk
+      .trim()
+  );
+}
 
   function extractCounts(line, expectedCount) {
     let nums = (line.match(/\d[\d,]*/g) || []).map(cleanInt).filter(n => n > 0);
