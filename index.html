@@ -455,6 +455,16 @@ function parseIdentityTextV2(nameText, statsText) {
     playerName = candidateName;
   }
 
+console.log({
+  rawName,
+  rawStats,
+  candidateName,
+  playerName,
+  alliance,
+  powerRaw,
+  killsRaw
+});
+
   const rec = {
     screen_type: "player_identity",
     player_id: {
@@ -651,11 +661,9 @@ async function ocrCanvas(canvas, whitelist = "") {
 
     const img = await loadImageFromFile(file);
 
-    // Crop 1: name bar
-    const nameCanvas = cropCanvas(img, 0.28, 0.645, 0.64, 0.095);
+    const nameCanvas = cropCanvas(img, 0.30, 0.655, 0.62, 0.085);
 
-    // Crop 2: info block with ID, power, kills, alliance, kingdom
-    const statsCanvas = cropCanvas(img, 0.35, 0.72, 0.53, 0.21);
+const statsCanvas = cropCanvas(img, 0.38, 0.72, 0.50, 0.21);
 
     const nameText = await ocrCanvas(
       nameCanvas,
