@@ -426,16 +426,22 @@ if (powerRaw && /^[0-9]+M$/i.test(powerRaw)) {
   }
 
   candidateName = String(candidateName || "")
-    .replace(/[^A-Za-z0-9\[\]_-]/g, "")
-    .trim();
+  .replace(/[^A-Za-z0-9\[\]_-]/g, "")
+  .trim();
+
+// repair missing opening bracket
+if (!candidateName.startsWith("[") && candidateName.includes("]")) {
+  candidateName = "[" + candidateName;
+}
+
+// repair missing closing bracket in alliance tag
+// example: [AllAglaia -> [All]Aglaia
+if (alliance && candidateName && candidateName.startsWith("[" + alliance) && !candidateName.startsWith("[" + alliance + "]")) {
+  candidateName = candidateName.replace("[" + alliance, "[" + alliance + "]");
+}
 
 // trim obvious trailing OCR junk
 candidateName = candidateName.replace(/[Kk]+$/, "");
-
-// reject names that are mostly garbage
-if (candidateName && candidateName.length < 4) {
-  candidateName = "";
-}
 
 // fallback: try to recover a tagged name directly from stats text
 if (!candidateName) {
