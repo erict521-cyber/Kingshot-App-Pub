@@ -211,6 +211,24 @@
       </div>
     </div>
 
+<div class="card">
+  <b>Governor bonus overview capture</b>
+  <div class="small" style="margin-top:6px;">
+    Upload the full Bonus Overview scroll set. The parser merges repeated sections across screenshots.
+  </div>
+
+  <label for="govFiles">Governor screenshots</label>
+  <input id="govFiles" type="file" accept="image/*" multiple />
+  <button onclick="readGovernor()">Read Governor Screenshots</button>
+  <div id="govStatus" class="status"></div>
+
+  <label for="govParsed">Parsed governor record</label>
+  <textarea id="govParsed" placeholder="Parsed governor JSON will appear here."></textarea>
+
+  <label for="govOCR">Governor OCR text</label>
+  <textarea id="govOCR" placeholder="Merged governor OCR text will appear here."></textarea>
+</div>
+
     <div class="card">
       <b>Current combined record</b>
       <div class="small" style="margin-top:6px;">
