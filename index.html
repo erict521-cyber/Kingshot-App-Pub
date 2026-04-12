@@ -511,14 +511,14 @@ function parseIdentityTextV2(nameText, statsText) {
 }
 
 function getTroopFamily(name) {
-      const n = String(name || "").toLowerCase();
+  const n = String(name || "").toLowerCase();
 
-      if (n.includes("infantry")) return "infantry";
-      if (n.includes("cavalry") || n.includes("lancer")) return "cavalry";
-      if (n.includes("archer") || n.includes("archers") || n.includes("marksman")) return "archers";
+  if (n.includes("infantry")) return "infantry";
+  if (n.includes("cavalry") || n.includes("lancer")) return "cavalry";
+  if (n.includes("archer") || n.includes("archers") || n.includes("marksman")) return "archers";
 
-      return "unknown";
-    }
+  return "unknown";
+}
 
     function isLikelyTroopRow(rawName, count) {
       if (!rawName || !count) return false;
