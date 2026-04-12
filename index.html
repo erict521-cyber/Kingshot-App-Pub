@@ -565,11 +565,16 @@ function parseTroopColumns(leftText, rightText) {
 
       if (!count) continue;
 
-      rows.push({
-        raw_name: rawName,
-        family,
-        count
-      });
+      rawName = rawName
+  .replace(/^[A-Za-z]\s+/, "")   // remove single stray letter prefix
+  .replace(/^[^A-Za-z]+/, "")    // remove leading symbols
+  .trim();
+
+rows.push({
+  raw_name: rawName,
+  family,
+  count
+});
     }
 
     return rows;
