@@ -122,78 +122,82 @@ async function readHero() {
 
   setStatus("Reading hero screenshot...");
 
-  const img = await loadImageFromFile(file);
+  try {
+    const img = await loadImageFromFile(file);
 
-  // Crop regions based on this hero overview layout
-  const nameCanvas = cropCanvas(img, 0.28, 0.00, 0.42, 0.12);
-  const powerCanvas = cropCanvas(img, 0.18, 0.46, 0.52, 0.14);
-const summaryRowCanvas = cropCanvas(img, 0.08, 0.60, 0.78, 0.18);
-const levelCanvas = cropCanvas(img, 0.34, 0.62, 0.22, 0.16);
-  const rarityCanvas = cropCanvas(img, 0.00, 0.08, 0.20, 0.12);
+    const nameCanvas = cropCanvas(img, 0.28, 0.00, 0.42, 0.12);
+    const powerCanvas = cropCanvas(img, 0.18, 0.46, 0.52, 0.14);
+    const summaryRowCanvas = cropCanvas(img, 0.08, 0.60, 0.78, 0.18);
+    const levelCanvas = cropCanvas(img, 0.34, 0.62, 0.22, 0.16);
+    const rarityCanvas = cropCanvas(img, 0.00, 0.08, 0.20, 0.12);
 
-  const fullResult = await Tesseract.recognize(file, "eng");
-  const fullText = fullResult.data.text || "";
+    const fullResult = await Tesseract.recognize(file, "eng");
+    const fullText = fullResult.data.text || "";
 
-  const nameText = await ocrCanvas(
-    nameCanvas,
-    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz "
-  );
+    const nameText = await ocrCanvas(
+      nameCanvas,
+      "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz "
+    );
 
-  const powerText = await ocrCanvas(
-  powerCanvas,
-  "0123456789, "
-);
+    const powerText = await ocrCanvas(
+      powerCanvas,
+      "0123456789, "
+    );
 
-const summaryRowText = await ocrCanvas(
-  summaryRowCanvas,
-  "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789, "
-);
+    const summaryRowText = await ocrCanvas(
+      summaryRowCanvas,
+      "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789, "
+    );
 
-const levelText = await ocrCanvas(
-  levelCanvas,
-  "0123456789 "
-);
-  const rarityText = await ocrCanvas(
-    rarityCanvas,
-    "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
-  );
+    const levelText = await ocrCanvas(
+      levelCanvas,
+      "0123456789 "
+    );
 
-  const debugText = [
-    "--- NAME OCR ---",
-    nameText,
-    "",
-    "--- POWER OCR ---",
-    powerText,
-    "",
-    "--- SUMMARY ROW OCR ---",
-summaryRowText,
-"",
-"--- LEVEL OCR ---",
-levelText,
-"",
-    "--- RARITY OCR ---",
-    rarityText,
-    "",
-    "--- FULL OCR ---",
-    fullText
-  ].join("\n");
+    const rarityText = await ocrCanvas(
+      rarityCanvas,
+      "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+    );
 
-  document.getElementById("heroOCR").value = debugText;
+    const debugText = [
+      "--- NAME OCR ---",
+      nameText,
+      "",
+      "--- POWER OCR ---",
+      powerText,
+      "",
+      "--- SUMMARY ROW OCR ---",
+      summaryRowText,
+      "",
+      "--- LEVEL OCR ---",
+      levelText,
+      "",
+      "--- RARITY OCR ---",
+      rarityText,
+      "",
+      "--- FULL OCR ---",
+      fullText
+    ].join("\n");
 
-  currentHero = parseHeroOverviewParts({
-    nameText,
-    powerText,
-    escortText,
-    levelText,
-    capacityText,
-    rarityText,
-    fullText
-  });
+    document.getElementById("heroOCR").value = debugText;
 
-  document.getElementById("heroParsed").value =
-    JSON.stringify(currentHero, null, 2);
+    currentHero = parseHeroOverviewParts({
+      nameText,
+      powerText,
+      summaryRowText,
+      levelText,
+      rarityText,
+      fullText
+    });
 
-  setStatus("Hero parsed.");
+    document.getElementById("heroParsed").value =
+      JSON.stringify(currentHero, null, 2);
+
+    setStatus("Hero parsed.");
+  } catch (err) {
+    console.error(err);
+    setStatus("Hero OCR failed: " + err.message);
+  }
 }
 
 function parseHeroOverviewParts(parts) {
