@@ -4,14 +4,18 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Kingshot Hero Capture</title>
-
   <script src="https://cdn.jsdelivr.net/npm/tesseract.js@4/dist/tesseract.min.js"></script>
-
   <style>
     body {
       font-family: Arial, sans-serif;
       background: #f5f5f7;
       padding: 12px;
+      margin: 0;
+    }
+
+    .wrap {
+      max-width: 1000px;
+      margin: 0 auto;
     }
 
     .card {
@@ -26,44 +30,59 @@
       width: 100%;
       min-height: 150px;
       font-family: monospace;
+      box-sizing: border-box;
     }
 
-    button {
-      padding: 8px 12px;
-      margin: 5px;
+    button, input[type="file"] {
+      margin-top: 8px;
+      margin-right: 8px;
+    }
+
+    .status {
+      margin-top: 8px;
+      min-height: 1.2rem;
     }
   </style>
 </head>
-
 <body>
+<div class="wrap">
+  <h1>Hero Capture</h1>
 
-<h1>Hero Capture</h1>
+  <div style="margin-bottom:10px;">
+    <button onclick="location.href='index.html'">Back to Main</button>
+  </div>
 
-<div>
-  <button onclick="location.href='index.html'">Back to Main</button>
-</div>
+  <div class="card">
+    <b>Upload Hero Screenshot</b><br><br>
 
-<div class="card">
-  <b>Upload Hero Screenshot</b><br><br>
+    <input type="file" id="heroFile" accept="image/*"><br><br>
+    <button onclick="readHero()">Read Hero</button>
+    <div id="heroStatus" class="status"></div>
 
-  <input type="file" id="heroFile" accept="image/*"><br><br>
-  <button onclick="readHero()">Read Hero</button>
+    <h3>OCR Output</h3>
+    <textarea id="heroOCR"></textarea>
 
-  <h3>OCR Output</h3>
-  <textarea id="heroOCR"></textarea>
+    <h3>Parsed Output</h3>
+    <textarea id="heroParsed"></textarea>
 
-  <h3>Parsed Output</h3>
-  <textarea id="heroParsed"></textarea>
-
-  <button onclick="saveHero()">Save to Player</button>
+    <button onclick="saveHero()">Save to Player</button>
+  </div>
 </div>
 
 <script>
 const DB_KEY = "kingshot_player_troops_capture_v1_db";
-
 let currentHero = null;
 
-// ===== DB =====
+const HERO_LIBRARY = {
+  jabel: { canonical_name: "Jabel", troop_type: "cavalry", rarity: "SSR" },
+  saul: { canonical_name: "Saul", troop_type: "archers", rarity: "SSR" },
+  zoe: { canonical_name: "Zoe", troop_type: "infantry", rarity: "SSR" }
+};
+
+function setStatus(msg = "") {
+  document.getElementById("heroStatus").textContent = msg;
+}
+
 function getDb() {
   const raw = localStorage.getItem(DB_KEY);
   return raw ? JSON.parse(raw) : { version: "v1", players: {} };
@@ -73,32 +92,49 @@ function setDb(db) {
   localStorage.setItem(DB_KEY, JSON.stringify(db));
 }
 
-// ===== OCR =====
+function nowIso() {
+  return new Date().toISOString();
+}
+
+function cleanInt(s) {
+  return parseInt(String(s || "").replace(/,/g, "").replace(/[^\d]/g, ""), 10) || 0;
+}
+
+function normalizeHeroText(text) {
+  return String(text || "")
+    .replace(/[’']/g, "'")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function normalizeHeroName(name) {
+  return String(name || "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, "");
+}
+
 async function readHero() {
   const file = document.getElementById("heroFile").files[0];
-  if (!file) return alert("Upload image first");
+  if (!file) {
+    alert("Upload image first");
+    return;
+  }
+
+  setStatus("Reading hero screenshot...");
 
   const result = await Tesseract.recognize(file, "eng");
-  const text = result.data.text;
+  const text = result.data.text || "";
 
   document.getElementById("heroOCR").value = text;
 
-  currentHero = parseHero(text);
+  currentHero = parseHeroOverviewText(text);
 
   document.getElementById("heroParsed").value =
     JSON.stringify(currentHero, null, 2);
+
+  setStatus("Hero parsed.");
 }
 
-const HERO_LIBRARY = {
-  jabel: { canonical_name: "Jabel", troop_type: "cavalry", rarity: "SSR" },
-  saul: { canonical_name: "Saul", troop_type: "archers", rarity: "SSR" },
-  zoe: { canonical_name: "Zoe", troop_type: "infantry", rarity: "SSR" },
-
-  // add more as you test them
-  // acanthea: { canonical_name: "Acanthea", troop_type: "...", rarity: "..." }
-};
-
-// ===== PARSER (starter version) =====
 function parseHeroOverviewText(text) {
   const raw = String(text || "");
   const lines = raw
@@ -121,7 +157,6 @@ function parseHeroOverviewText(text) {
     review_flags: []
   };
 
-  // hero name: first readable title-like line near top
   for (const line of lines) {
     if (/escorts|level|troops capacity|stats|skills|gear|upgrade/i.test(line)) continue;
     if (/^[A-Za-z][A-Za-z0-9' -]{2,}$/.test(line)) {
@@ -130,19 +165,15 @@ function parseHeroOverviewText(text) {
     }
   }
 
-  // rarity from OCR if present
   if (/SSR/i.test(raw)) rec.rarity = "SSR";
   else if (/SR/i.test(raw)) rec.rarity = "SR";
   else if (/\bR\b/i.test(raw)) rec.rarity = "R";
 
-  // hero power: first big comma number
   const powerMatch = raw.match(/\b\d{1,3}(?:,\d{3})+\b/);
   if (powerMatch) {
     rec.hero_power = cleanInt(powerMatch[0]);
   }
 
-  // labeled row:
-  // Escorts 10 | Level 73 | Troops Capacity 13,190
   const escortMatch = raw.match(/Escorts\s*(\d+)/i);
   if (escortMatch) rec.escort_count = cleanInt(escortMatch[1]);
 
@@ -152,7 +183,6 @@ function parseHeroOverviewText(text) {
   const capMatch = raw.match(/Troops?\s*Capacity\s*(\d[\d,]*)/i);
   if (capMatch) rec.troop_capacity = cleanInt(capMatch[1]);
 
-  // infer hero metadata from library
   const heroKey = normalizeHeroName(rec.hero_name);
   const heroMeta = HERO_LIBRARY[heroKey];
 
@@ -173,16 +203,13 @@ function parseHeroOverviewText(text) {
   return rec;
 }
 
-function normalizeHeroName(name) {
-  return String(name || "")
-    .toLowerCase()
-    .replace(/[^a-z0-9]/g, "");
-}
-
-// ===== SAVE =====
 function saveHero() {
-  const db = getDb();
+  if (!currentHero) {
+    alert("No hero parsed yet");
+    return;
+  }
 
+  const db = getDb();
   const playerId = prompt("Enter player ID to attach hero:");
 
   if (!playerId) return;
@@ -193,12 +220,13 @@ function saveHero() {
   }
 
   db.players[playerId].hero = currentHero;
+  db.players[playerId].updated_at = nowIso();
 
   setDb(db);
 
   alert("Hero saved to player " + playerId);
+  setStatus("Hero saved.");
 }
 </script>
-
 </body>
 </html>
