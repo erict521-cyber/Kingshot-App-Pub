@@ -262,6 +262,7 @@ function parseHeroOverviewParts(parts) {
     else if (/\bR\b/i.test(rarityRaw)) rec.rarity = "R";
   }
 
+  // hero power: first big comma number in full OCR
   const powerMatch =
     String(fullText || "").match(/\b\d{1,3}(?:,\d{3})+\b/) ||
     String(powerText || "").match(/\b\d{1,3}(?:,\d{3})+\b/);
@@ -270,30 +271,57 @@ function parseHeroOverviewParts(parts) {
     rec.hero_power = cleanInt(powerMatch[0]);
   }
 
-  const summaryNums = (String(summaryRowText || "").match(/\d[\d,]*/g) || [])
-    .map(cleanInt)
-    .filter(n => n > 0);
+  // escorts + troop capacity:
+  // parse from the full OCR block after "Escorts Level Troops Capacity"
+  const fullLines = String(fullText || "")
+    .split(/\n+/)
+    .map(s => s.trim())
+    .filter(Boolean);
 
-  if (summaryNums.length >= 1) rec.escort_count = summaryNums[0];
-  if (summaryNums.length >= 2) rec.troop_capacity = summaryNums[summaryNums.length - 1];
+  const summaryIdx = fullLines.findIndex(line =>
+    /Escorts/i.test(line) && /Level/i.test(line) && /Troops?\s*Capacity/i.test(line)
+  );
 
+  if (summaryIdx >= 0 && summaryIdx + 1 < fullLines.length) {
+    const nextLine = fullLines[summaryIdx + 1];
+    const nums = (nextLine.match(/\d[\d,]*/g) || [])
+      .map(cleanInt)
+      .filter(n => n > 0);
+
+    // likely row = [10, 13,190] with level OCR failing in the middle
+    const smallNums = nums.filter(n => n < 1000);
+    const capNums = nums.filter(n => n >= 1000 && n < 100000);
+
+    if (smallNums.length) rec.escort_count = smallNums[0];
+    if (capNums.length) rec.troop_capacity = capNums[capNums.length - 1];
+  }
+
+  // fallback from summary crop only if still missing
+  if (!rec.escort_count || !rec.troop_capacity) {
+    const summaryNums = (String(summaryRowText || "").match(/\d[\d,]*/g) || [])
+      .map(cleanInt)
+      .filter(n => n > 0 && n < 100000); // ignore huge hero power junk
+
+    const smallNums = summaryNums.filter(n => n < 1000);
+    const capNums = summaryNums.filter(n => n >= 1000);
+
+    if (!rec.escort_count && smallNums.length) rec.escort_count = smallNums[0];
+    if (!rec.troop_capacity && capNums.length) rec.troop_capacity = capNums[capNums.length - 1];
+  }
+
+  // level: only trust if it looks realistic and not equal to escort count
   const levelNums = (String(levelText || "").match(/\d+/g) || [])
     .map(v => parseInt(v, 10))
-    .filter(v => !isNaN(v));
+    .filter(v => !isNaN(v) && v >= 1 && v <= 100);
 
   if (levelNums.length) {
-    rec.level = levelNums[0];
+    const candidate = levelNums[0];
+    if (candidate !== rec.escort_count) {
+      rec.level = candidate;
+    }
   }
 
-  if (!rec.level) {
-    const fullNums = (String(fullText || "").match(/\d[\d,]*/g) || [])
-      .map(cleanInt)
-      .filter(n => n > 0 && n < 200);
-
-    const candidates = fullNums.filter(n => n !== rec.escort_count);
-    if (candidates.length) rec.level = candidates[0];
-  }
-
+  // if level crop fails, leave null for now rather than poisoning data
   if (!rec.hero_name) rec.review_flags.push("Missing hero_name");
   if (!rec.level) rec.review_flags.push("Missing level");
   if (!rec.hero_power) rec.review_flags.push("Missing hero_power");
@@ -304,7 +332,6 @@ function parseHeroOverviewParts(parts) {
 
   return rec;
 }
-
 async function loadImageFromFile(file) {
   return new Promise((resolve, reject) => {
     const img = new Image();
