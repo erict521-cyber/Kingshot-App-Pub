@@ -126,10 +126,9 @@ async function readHero() {
 
   // Crop regions based on this hero overview layout
   const nameCanvas = cropCanvas(img, 0.28, 0.00, 0.42, 0.12);
-  const powerCanvas = cropCanvas(img, 0.30, 0.52, 0.42, 0.08);
-  const escortCanvas = cropCanvas(img, 0.12, 0.63, 0.18, 0.12);
-  const levelCanvas = cropCanvas(img, 0.39, 0.63, 0.16, 0.12);
-  const capacityCanvas = cropCanvas(img, 0.55, 0.63, 0.28, 0.12);
+  const powerCanvas = cropCanvas(img, 0.18, 0.46, 0.52, 0.14);
+const summaryRowCanvas = cropCanvas(img, 0.08, 0.60, 0.78, 0.18);
+const levelCanvas = cropCanvas(img, 0.34, 0.62, 0.22, 0.16);
   const rarityCanvas = cropCanvas(img, 0.00, 0.08, 0.20, 0.12);
 
   const fullResult = await Tesseract.recognize(file, "eng");
@@ -141,25 +140,19 @@ async function readHero() {
   );
 
   const powerText = await ocrCanvas(
-    powerCanvas,
-    "0123456789, "
-  );
+  powerCanvas,
+  "0123456789, "
+);
 
-  const escortText = await ocrCanvas(
-    escortCanvas,
-    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789 "
-  );
+const summaryRowText = await ocrCanvas(
+  summaryRowCanvas,
+  "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789, "
+);
 
-  const levelText = await ocrCanvas(
-    levelCanvas,
-    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789 "
-  );
-
-  const capacityText = await ocrCanvas(
-    capacityCanvas,
-    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789, "
-  );
-
+const levelText = await ocrCanvas(
+  levelCanvas,
+  "0123456789 "
+);
   const rarityText = await ocrCanvas(
     rarityCanvas,
     "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
@@ -172,15 +165,12 @@ async function readHero() {
     "--- POWER OCR ---",
     powerText,
     "",
-    "--- ESCORT OCR ---",
-    escortText,
-    "",
-    "--- LEVEL OCR ---",
-    levelText,
-    "",
-    "--- CAPACITY OCR ---",
-    capacityText,
-    "",
+    "--- SUMMARY ROW OCR ---",
+summaryRowText,
+"",
+"--- LEVEL OCR ---",
+levelText,
+"",
     "--- RARITY OCR ---",
     rarityText,
     "",
