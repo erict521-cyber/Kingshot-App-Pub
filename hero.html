@@ -311,15 +311,17 @@ function parseHeroOverviewParts(parts) {
 
   // level: only trust if it looks realistic and not equal to escort count
   const levelNums = (String(levelText || "").match(/\d+/g) || [])
-    .map(v => parseInt(v, 10))
-    .filter(v => !isNaN(v) && v >= 1 && v <= 100);
+  .map(v => parseInt(v, 10))
+  .filter(v => !isNaN(v) && v >= 1 && v <= 100);
 
-  if (levelNums.length) {
-    const candidate = levelNums[0];
-    if (candidate !== rec.escort_count) {
-      rec.level = candidate;
-    }
+// For now, reject suspicious low levels from this screen.
+// Your tested heroes are not level 1, and this crop is still noisy.
+if (levelNums.length) {
+  const candidate = levelNums[0];
+  if (candidate >= 10 && candidate !== rec.escort_count) {
+    rec.level = candidate;
   }
+}
 
   // if level crop fails, leave null for now rather than poisoning data
   if (!rec.hero_name) rec.review_flags.push("Missing hero_name");
