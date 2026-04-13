@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+.<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
@@ -225,7 +225,6 @@ function parseHeroOverviewParts(parts) {
     review_flags: []
   };
 
-  // hero name: mostly trust full OCR + library, not the crop
   let rawName = String(nameText || "")
     .replace(/[^A-Za-z ]/g, " ")
     .replace(/\s+/g, " ")
@@ -256,7 +255,6 @@ function parseHeroOverviewParts(parts) {
     rec.hero_name = rawName;
   }
 
-  // rarity fallback
   if (!rec.rarity) {
     const rarityRaw = `${rarityText} ${fullText}`;
     if (/SSR/i.test(rarityRaw)) rec.rarity = "SSR";
@@ -264,7 +262,6 @@ function parseHeroOverviewParts(parts) {
     else if (/\bR\b/i.test(rarityRaw)) rec.rarity = "R";
   }
 
-  // power: prefer full OCR big comma number
   const powerMatch =
     String(fullText || "").match(/\b\d{1,3}(?:,\d{3})+\b/) ||
     String(powerText || "").match(/\b\d{1,3}(?:,\d{3})+\b/);
@@ -273,17 +270,13 @@ function parseHeroOverviewParts(parts) {
     rec.hero_power = cleanInt(powerMatch[0]);
   }
 
-  // summary row parsing:
-  // "Escorts Level Troops Capacity ... 10 ... 13,190"
   const summaryNums = (String(summaryRowText || "").match(/\d[\d,]*/g) || [])
     .map(cleanInt)
     .filter(n => n > 0);
 
-  // first number = escorts, last number = troop capacity
   if (summaryNums.length >= 1) rec.escort_count = summaryNums[0];
   if (summaryNums.length >= 2) rec.troop_capacity = summaryNums[summaryNums.length - 1];
 
-  // level: dedicated crop first
   const levelNums = (String(levelText || "").match(/\d+/g) || [])
     .map(v => parseInt(v, 10))
     .filter(v => !isNaN(v));
@@ -292,13 +285,11 @@ function parseHeroOverviewParts(parts) {
     rec.level = levelNums[0];
   }
 
-  // fallback: search full OCR near the summary row for a 1-2 digit value between escorts and capacity
   if (!rec.level) {
     const fullNums = (String(fullText || "").match(/\d[\d,]*/g) || [])
       .map(cleanInt)
       .filter(n => n > 0 && n < 200);
 
-    // likely candidates for level are 2-digit numbers that are not escorts
     const candidates = fullNums.filter(n => n !== rec.escort_count);
     if (candidates.length) rec.level = candidates[0];
   }
