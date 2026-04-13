@@ -69,9 +69,27 @@
   </div>
 </div>
 
+<div class="card">
+  <b>Upload Hero Stats Screenshot</b><br><br>
+
+  <input type="file" id="heroStatsFile" accept="image/*"><br><br>
+  <button onclick="readHeroStats()">Read Hero Stats</button>
+  <div id="heroStatsStatus" class="status"></div>
+
+  <h3>Hero Stats OCR Output</h3>
+  <textarea id="heroStatsOCR"></textarea>
+
+  <h3>Hero Stats Parsed Output</h3>
+  <textarea id="heroStatsParsed"></textarea>
+
+  <button onclick="saveHeroStats()">Save Hero Stats to Player</button>
+</div>
+
 <script>
 const DB_KEY = "kingshot_player_troops_capture_v1_db";
 let currentHero = null;
+let currentHeroOverview = null;
+let currentHeroStats = null;
 
 const HERO_LIBRARY = {
   jabel: { canonical_name: "Jabel", troop_type: "cavalry", rarity: "SSR" },
@@ -181,7 +199,7 @@ async function readHero() {
 
     document.getElementById("heroOCR").value = debugText;
 
-    currentHero = parseHeroOverviewParts({
+    currentHeroOverview = parseHeroOverviewParts({
       nameText,
       powerText,
       summaryRowText,
@@ -190,13 +208,53 @@ async function readHero() {
       fullText
     });
 
-    document.getElementById("heroParsed").value =
-      JSON.stringify(currentHero, null, 2);
+    currentHero = currentHeroOverview;
+
+document.getElementById("heroParsed").value =
+  JSON.stringify(currentHeroOverview, null, 2);
 
     setStatus("Hero parsed.");
   } catch (err) {
     console.error(err);
     setStatus("Hero OCR failed: " + err.message);
+  }
+}
+
+async function readHeroStats() {
+  const file = document.getElementById("heroStatsFile").files[0];
+  if (!file) {
+    alert("Upload hero stats image first");
+    return;
+  }
+
+  document.getElementById("heroStatsStatus").textContent = "Reading hero stats screenshot...";
+
+  try {
+    const result = await Tesseract.recognize(file, "eng");
+    const text = result.data.text || "";
+
+    document.getElementById("heroStatsOCR").value = text;
+
+    const heroName =
+      currentHeroOverview?.hero_name ||
+      currentHero?.hero_name ||
+      null;
+
+    const troopType =
+      currentHeroOverview?.troop_type ||
+      currentHero?.troop_type ||
+      null;
+
+    currentHeroStats = parseHeroStats(text, heroName, troopType);
+
+    document.getElementById("heroStatsParsed").value =
+      JSON.stringify(currentHeroStats, null, 2);
+
+    document.getElementById("heroStatsStatus").textContent = "Hero stats parsed.";
+  } catch (err) {
+    console.error(err);
+    document.getElementById("heroStatsStatus").textContent =
+      "Hero stats OCR failed: " + err.message;
   }
 }
 
@@ -323,6 +381,7 @@ if (levelNums.length) {
   }
 }
 
+
   // if level crop fails, leave null for now rather than poisoning data
   if (!rec.hero_name) rec.review_flags.push("Missing hero_name");
   if (!rec.level) rec.review_flags.push("Missing level");
@@ -331,6 +390,90 @@ if (levelNums.length) {
   if (!rec.troop_capacity) rec.review_flags.push("Missing troop_capacity");
   if (!rec.troop_type) rec.review_flags.push("Missing troop_type");
   if (!rec.rarity) rec.review_flags.push("Missing rarity");
+
+  return rec;
+}
+function parseHeroStats(text, heroName = null, troopType = null) {
+  const raw = String(text || "");
+
+  const lines = raw
+    .split(/\n+/)
+    .map(s => s.trim())
+    .filter(Boolean);
+
+  function extractNumber(line) {
+    const m = line.match(/([\d,]+(?:\.\d+)?)/);
+    if (!m) return null;
+    return parseFloat(m[1].replace(/,/g, ""));
+  }
+
+  function extractPercent(line) {
+    const m = line.match(/([\d.]+)\s*%/);
+    if (!m) return null;
+    return parseFloat(m[1]);
+  }
+
+  function findValue(keyword, isPercent = false) {
+    for (const line of lines) {
+      if (new RegExp(keyword, "i").test(line)) {
+        return isPercent ? extractPercent(line) : extractNumber(line);
+      }
+    }
+    return null;
+  }
+
+  const rec = {
+    screen_type: "hero_stats",
+    hero_name: heroName,
+    troop_type: troopType,
+
+    conquest: {
+      hero_attack: findValue("Hero Attack"),
+      hero_defense: findValue("Hero Defense"),
+      hero_health: findValue("Hero Health"),
+      escort_attack: findValue("Escort Attack"),
+      escort_defense: findValue("Escort Defense"),
+      escort_health: findValue("Escort Health")
+    },
+
+    expedition: {
+      attack: null,
+      defense: null,
+      lethality: null,
+      health: null
+    },
+
+    captured_at: nowIso(),
+    confidence: { overall: 0.95 },
+    review_flags: []
+  };
+
+  // Prefer troop-type-specific expedition stats
+  if (troopType === "cavalry") {
+    rec.expedition.attack = findValue("Cavalry Attack", true);
+    rec.expedition.defense = findValue("Cavalry Defense", true);
+    rec.expedition.lethality = findValue("Cavalry Lethality", true);
+    rec.expedition.health = findValue("Cavalry Health", true);
+  } else if (troopType === "infantry") {
+    rec.expedition.attack = findValue("Infantry Attack", true);
+    rec.expedition.defense = findValue("Infantry Defense", true);
+    rec.expedition.lethality = findValue("Infantry Lethality", true);
+    rec.expedition.health = findValue("Infantry Health", true);
+  } else if (troopType === "archers") {
+    rec.expedition.attack = findValue("Archer Attack", true);
+    rec.expedition.defense = findValue("Archer Defense", true);
+    rec.expedition.lethality = findValue("Archer Lethality", true);
+    rec.expedition.health = findValue("Archer Health", true);
+  }
+
+  if (!rec.hero_name) rec.review_flags.push("Missing hero_name");
+  if (!rec.troop_type) rec.review_flags.push("Missing troop_type");
+  if (!rec.conquest.hero_attack) rec.review_flags.push("Missing conquest stats");
+  if (!rec.expedition.attack) rec.review_flags.push("Missing expedition stats");
+
+  if (rec.review_flags.length) {
+    rec.confidence.overall = 0.82;
+  }
 
   return rec;
 }
@@ -399,6 +542,32 @@ function saveHero() {
 
   alert("Hero saved to player " + playerId);
   setStatus("Hero saved.");
+}
+
+function saveHeroStats() {
+  if (!currentHeroStats) {
+    alert("No hero stats parsed yet");
+    return;
+  }
+
+  const db = getDb();
+  const playerId = prompt("Enter player ID to attach hero stats:");
+
+  if (!playerId) return;
+
+  if (!db.players[playerId]) {
+    alert("Player not found in DB");
+    return;
+  }
+
+  db.players[playerId].hero_stats = db.players[playerId].hero_stats || {};
+  db.players[playerId].hero_stats[currentHeroStats.hero_name || "unknown_hero"] = currentHeroStats;
+  db.players[playerId].updated_at = nowIso();
+
+  setDb(db);
+
+  alert("Hero stats saved to player " + playerId);
+  document.getElementById("heroStatsStatus").textContent = "Hero stats saved.";
 }
 </script>
 </body>
