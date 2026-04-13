@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Kingshot Hero Capture</title>
+
+  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@4/dist/tesseract.min.js"></script>
+
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #f5f5f7;
+      padding: 12px;
+    }
+
+    .card {
+      background: white;
+      border: 1px solid #ddd;
+      border-radius: 10px;
+      padding: 14px;
+      margin-bottom: 12px;
+    }
+
+    textarea {
+      width: 100%;
+      min-height: 150px;
+      font-family: monospace;
+    }
+
+    button {
+      padding: 8px 12px;
+      margin: 5px;
+    }
+  </style>
+</head>
+
+<body>
+
+<h1>Hero Capture</h1>
+
+<div>
+  <button onclick="location.href='index.html'">Back to Main</button>
+</div>
+
+<div class="card">
+  <b>Upload Hero Screenshot</b><br><br>
+
+  <input type="file" id="heroFile" accept="image/*"><br><br>
+  <button onclick="readHero()">Read Hero</button>
+
+  <h3>OCR Output</h3>
+  <textarea id="heroOCR"></textarea>
+
+  <h3>Parsed Output</h3>
+  <textarea id="heroParsed"></textarea>
+
+  <button onclick="saveHero()">Save to Player</button>
+</div>
+
+<script>
+const DB_KEY = "kingshot_player_troops_capture_v1_db";
+
+let currentHero = null;
+
+// ===== DB =====
+function getDb() {
+  const raw = localStorage.getItem(DB_KEY);
+  return raw ? JSON.parse(raw) : { version: "v1", players: {} };
+}
+
+function setDb(db) {
+  localStorage.setItem(DB_KEY, JSON.stringify(db));
+}
+
+// ===== OCR =====
+async function readHero() {
+  const file = document.getElementById("heroFile").files[0];
+  if (!file) return alert("Upload image first");
+
+  const result = await Tesseract.recognize(file, "eng");
+  const text = result.data.text;
+
+  document.getElementById("heroOCR").value = text;
+
+  currentHero = parseHero(text);
+
+  document.getElementById("heroParsed").value =
+    JSON.stringify(currentHero, null, 2);
+}
+
+// ===== PARSER (starter version) =====
+function parseHero(text) {
+  const raw = String(text);
+
+  const levelMatch = raw.match(/Lv\.?\s*(\d+)/i);
+  const powerMatch = raw.match(/Power[:\s]*([\d,]+)/i);
+
+  return {
+    screen_type: "hero",
+    level: levelMatch ? parseInt(levelMatch[1]) : null,
+    power: powerMatch ? parseInt(powerMatch[1].replace(/,/g,"")) : null,
+    captured_at: new Date().toISOString()
+  };
+}
+
+// ===== SAVE =====
+function saveHero() {
+  const db = getDb();
+
+  const playerId = prompt("Enter player ID to attach hero:");
+
+  if (!playerId) return;
+
+  if (!db.players[playerId]) {
+    alert("Player not found in DB");
+    return;
+  }
+
+  db.players[playerId].hero = currentHero;
+
+  setDb(db);
+
+  alert("Hero saved to player " + playerId);
+}
+</script>
+
+</body>
+</html>
