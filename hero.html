@@ -483,15 +483,44 @@ function parseHeroStatsParts(parts) {
   }
 
   // -------- hero identity from FULL OCR first --------
-  const fullNorm = normalizeHeroName(fullRaw);
+  const fullLines = fullRaw
+  .split(/\n+/)
+  .map(s => s.trim())
+  .filter(Boolean);
+
+let matchedMeta = null;
+
+// First: try line-by-line matching against hero library
+for (const line of fullLines) {
+  const cleanedLine = line.replace(/[^A-Za-z ]/g, " ").replace(/\s+/g, " ").trim();
+  const normLine = normalizeHeroName(cleanedLine);
+
   for (const [key, meta] of Object.entries(HERO_LIBRARY)) {
-    if (fullNorm.includes(key)) {
-      rec.hero_name = meta.canonical_name;
-      rec.troop_type = meta.troop_type;
-      rec.rarity = meta.rarity;
+    if (normLine === key || normLine.includes(key)) {
+      matchedMeta = meta;
       break;
     }
   }
+
+  if (matchedMeta) break;
+}
+
+// Fallback: search the entire OCR blob
+if (!matchedMeta) {
+  const fullNorm = normalizeHeroName(fullRaw);
+  for (const [key, meta] of Object.entries(HERO_LIBRARY)) {
+    if (fullNorm.includes(key)) {
+      matchedMeta = meta;
+      break;
+    }
+  }
+}
+
+if (matchedMeta) {
+  rec.hero_name = matchedMeta.canonical_name;
+  rec.troop_type = matchedMeta.troop_type;
+  rec.rarity = matchedMeta.rarity;
+}
 
   // rarity fallback from top crop or full OCR
   if (!rec.rarity) {
