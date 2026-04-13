@@ -230,22 +230,45 @@ async function readHeroStats() {
   document.getElementById("heroStatsStatus").textContent = "Reading hero stats screenshot...";
 
   try {
-    const result = await Tesseract.recognize(file, "eng");
-    const text = result.data.text || "";
+    const img = await loadImageFromFile(file);
 
-    document.getElementById("heroStatsOCR").value = text;
+    // Crop top identity area: hero name + rarity
+    const heroTopCanvas = cropCanvas(img, 0.00, 0.00, 1.00, 0.16);
 
-    const heroName =
-      currentHeroOverview?.hero_name ||
-      currentHero?.hero_name ||
-      null;
+    // Crop popup stats box
+    const statsPanelCanvas = cropCanvas(img, 0.28, 0.40, 0.62, 0.47);
 
-    const troopType =
-      currentHeroOverview?.troop_type ||
-      currentHero?.troop_type ||
-      null;
+    const heroTopText = await ocrCanvas(
+      heroTopCanvas,
+      "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz "
+    );
 
-    currentHeroStats = parseHeroStats(text, heroName, troopType);
+    const statsPanelText = await ocrCanvas(
+      statsPanelCanvas,
+      "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789,+.% "
+    );
+
+    const fullResult = await Tesseract.recognize(file, "eng");
+    const fullText = fullResult.data.text || "";
+
+    const debugText = [
+      "--- HERO TOP OCR ---",
+      heroTopText,
+      "",
+      "--- STATS PANEL OCR ---",
+      statsPanelText,
+      "",
+      "--- FULL OCR ---",
+      fullText
+    ].join("\n");
+
+    document.getElementById("heroStatsOCR").value = debugText;
+
+    currentHeroStats = parseHeroStatsParts({
+      heroTopText,
+      statsPanelText,
+      fullText
+    });
 
     document.getElementById("heroStatsParsed").value =
       JSON.stringify(currentHeroStats, null, 2);
@@ -393,47 +416,41 @@ if (levelNums.length) {
 
   return rec;
 }
-function parseHeroStats(text, heroName = null, troopType = null) {
-  const raw = String(text || "");
+function parseHeroStatsParts(parts) {
+  const {
+    heroTopText = "",
+    statsPanelText = "",
+    fullText = ""
+  } = parts || {};
 
-  const lines = raw
+  const topRaw = String(heroTopText || "");
+  const statsRaw = String(statsPanelText || "");
+  const fullRaw = String(fullText || "");
+
+  const topLines = topRaw
     .split(/\n+/)
     .map(s => s.trim())
     .filter(Boolean);
 
-  function extractNumber(line) {
-    const m = line.match(/([\d,]+(?:\.\d+)?)/);
-    if (!m) return null;
-    return parseFloat(m[1].replace(/,/g, ""));
-  }
-
-  function extractPercent(line) {
-    const m = line.match(/([\d.]+)\s*%/);
-    if (!m) return null;
-    return parseFloat(m[1]);
-  }
-
-  function findValue(keyword, isPercent = false) {
-    for (const line of lines) {
-      if (new RegExp(keyword, "i").test(line)) {
-        return isPercent ? extractPercent(line) : extractNumber(line);
-      }
-    }
-    return null;
-  }
+  const statLines = statsRaw
+    .split(/\n+/)
+    .map(s => s.trim())
+    .filter(Boolean)
+    .map(s => s.replace(/[|©®¥\/]/g, " ").replace(/\s+/g, " ").trim());
 
   const rec = {
     screen_type: "hero_stats",
-    hero_name: heroName,
-    troop_type: troopType,
+    hero_name: null,
+    troop_type: null,
+    rarity: null,
 
     conquest: {
-      hero_attack: findValue("Hero Attack"),
-      hero_defense: findValue("Hero Defense"),
-      hero_health: findValue("Hero Health"),
-      escort_attack: findValue("Escort Attack"),
-      escort_defense: findValue("Escort Defense"),
-      escort_health: findValue("Escort Health")
+      hero_attack: null,
+      hero_defense: null,
+      hero_health: null,
+      escort_attack: null,
+      escort_defense: null,
+      escort_health: null
     },
 
     expedition: {
@@ -448,26 +465,124 @@ function parseHeroStats(text, heroName = null, troopType = null) {
     review_flags: []
   };
 
-  // Prefer troop-type-specific expedition stats
-  if (troopType === "cavalry") {
-    rec.expedition.attack = findValue("Cavalry Attack", true);
-    rec.expedition.defense = findValue("Cavalry Defense", true);
-    rec.expedition.lethality = findValue("Cavalry Lethality", true);
-    rec.expedition.health = findValue("Cavalry Health", true);
-  } else if (troopType === "infantry") {
-    rec.expedition.attack = findValue("Infantry Attack", true);
-    rec.expedition.defense = findValue("Infantry Defense", true);
-    rec.expedition.lethality = findValue("Infantry Lethality", true);
-    rec.expedition.health = findValue("Infantry Health", true);
-  } else if (troopType === "archers") {
-    rec.expedition.attack = findValue("Archer Attack", true);
-    rec.expedition.defense = findValue("Archer Defense", true);
-    rec.expedition.lethality = findValue("Archer Lethality", true);
-    rec.expedition.health = findValue("Archer Health", true);
+  function extractLastNumber(line) {
+    const matches = line.match(/[\d,]+(?:\.\d+)?/g) || [];
+    if (!matches.length) return null;
+    return parseFloat(matches[matches.length - 1].replace(/,/g, ""));
   }
 
+  function extractLastPercent(line) {
+    const matches = line.match(/[+\-]?[\d.]+(?=\s*%)/g) || [];
+    if (!matches.length) return null;
+    return parseFloat(matches[matches.length - 1].replace("+", ""));
+  }
+
+  function findStatLine(keyword) {
+    for (const line of statLines) {
+      if (new RegExp(keyword, "i").test(line)) return line;
+    }
+    return null;
+  }
+
+  // -------- hero identity from top strip / full OCR --------
+  let heroMeta = null;
+  let detectedName = null;
+
+  // Try top OCR lines first
+  for (const line of topLines) {
+    const cleaned = line.replace(/[^A-Za-z ]/g, " ").replace(/\s+/g, " ").trim();
+    if (cleaned.length < 3) continue;
+
+    const key = normalizeHeroName(cleaned);
+    if (HERO_LIBRARY[key]) {
+      heroMeta = HERO_LIBRARY[key];
+      detectedName = heroMeta.canonical_name;
+      break;
+    }
+  }
+
+  // Fallback: search full OCR against known heroes
+  if (!heroMeta) {
+    const fullNorm = normalizeHeroName(fullRaw);
+    for (const [key, meta] of Object.entries(HERO_LIBRARY)) {
+      if (fullNorm.includes(key)) {
+        heroMeta = meta;
+        detectedName = meta.canonical_name;
+        break;
+      }
+    }
+  }
+
+  if (heroMeta) {
+    rec.hero_name = heroMeta.canonical_name;
+    rec.troop_type = heroMeta.troop_type;
+    rec.rarity = heroMeta.rarity;
+  } else if (detectedName) {
+    rec.hero_name = detectedName;
+  }
+
+  // rarity fallback from OCR
+  if (!rec.rarity) {
+    const rarityRaw = `${topRaw} ${fullRaw}`;
+    if (/SSR/i.test(rarityRaw)) rec.rarity = "SSR";
+    else if (/SR/i.test(rarityRaw)) rec.rarity = "SR";
+    else if (/\bR\b/i.test(rarityRaw)) rec.rarity = "R";
+  }
+
+  // -------- conquest --------
+  const conquestMap = [
+    ["Hero Attack", "hero_attack"],
+    ["Hero Defense", "hero_defense"],
+    ["Hero Health", "hero_health"],
+    ["Escort Attack", "escort_attack"],
+    ["Escort Defense", "escort_defense"],
+    ["Escort Health", "escort_health"]
+  ];
+
+  for (const [label, key] of conquestMap) {
+    const line = findStatLine(label);
+    if (line) {
+      rec.conquest[key] = extractLastNumber(line);
+    }
+  }
+
+  // -------- expedition based on troop type --------
+  if (rec.troop_type === "cavalry") {
+    const atk = findStatLine("Cavalry Attack");
+    const def = findStatLine("Cavalry Defense");
+    const leth = findStatLine("Cavalry Lethality");
+    const hp = findStatLine("Cavalry Health");
+
+    if (atk) rec.expedition.attack = extractLastPercent(atk);
+    if (def) rec.expedition.defense = extractLastPercent(def);
+    if (leth) rec.expedition.lethality = extractLastPercent(leth);
+    if (hp) rec.expedition.health = extractLastPercent(hp);
+  } else if (rec.troop_type === "infantry") {
+    const atk = findStatLine("Infantry Attack");
+    const def = findStatLine("Infantry Defense");
+    const leth = findStatLine("Infantry Lethality");
+    const hp = findStatLine("Infantry Health");
+
+    if (atk) rec.expedition.attack = extractLastPercent(atk);
+    if (def) rec.expedition.defense = extractLastPercent(def);
+    if (leth) rec.expedition.lethality = extractLastPercent(leth);
+    if (hp) rec.expedition.health = extractLastPercent(hp);
+  } else if (rec.troop_type === "archers") {
+    const atk = findStatLine("Archer Attack");
+    const def = findStatLine("Archer Defense");
+    const leth = findStatLine("Archer Lethality");
+    const hp = findStatLine("Archer Health");
+
+    if (atk) rec.expedition.attack = extractLastPercent(atk);
+    if (def) rec.expedition.defense = extractLastPercent(def);
+    if (leth) rec.expedition.lethality = extractLastPercent(leth);
+    if (hp) rec.expedition.health = extractLastPercent(hp);
+  }
+
+  // -------- review flags --------
   if (!rec.hero_name) rec.review_flags.push("Missing hero_name");
   if (!rec.troop_type) rec.review_flags.push("Missing troop_type");
+  if (!rec.rarity) rec.review_flags.push("Missing rarity");
   if (!rec.conquest.hero_attack) rec.review_flags.push("Missing conquest stats");
   if (!rec.expedition.attack) rec.review_flags.push("Missing expedition stats");
 
@@ -477,6 +592,7 @@ function parseHeroStats(text, heroName = null, troopType = null) {
 
   return rec;
 }
+
 async function loadImageFromFile(file) {
   return new Promise((resolve, reject) => {
     const img = new Image();
