@@ -200,9 +200,8 @@ function parseHeroOverviewParts(parts) {
   const {
     nameText = "",
     powerText = "",
-    escortText = "",
+    summaryRowText = "",
     levelText = "",
-    capacityText = "",
     rarityText = "",
     fullText = ""
   } = parts || {};
@@ -222,25 +221,19 @@ function parseHeroOverviewParts(parts) {
     review_flags: []
   };
 
-  function firstInt(text) {
-    const m = String(text || "").match(/\d[\d,]*/);
-    return m ? cleanInt(m[0]) : null;
-  }
-
-  // hero name: use cropped name text first
+  // hero name: mostly trust full OCR + library, not the crop
   let rawName = String(nameText || "")
     .replace(/[^A-Za-z ]/g, " ")
     .replace(/\s+/g, " ")
     .trim();
 
-  // try direct library match from cropped name
   let heroMeta = null;
+
   if (rawName) {
     const heroKey = normalizeHeroName(rawName);
     heroMeta = HERO_LIBRARY[heroKey] || null;
   }
 
-  // fallback: search full OCR against library keys
   if (!heroMeta) {
     const fullNorm = normalizeHeroName(fullText);
     for (const [key, meta] of Object.entries(HERO_LIBRARY)) {
@@ -259,7 +252,7 @@ function parseHeroOverviewParts(parts) {
     rec.hero_name = rawName;
   }
 
-  // rarity from crop/full OCR if not filled from library
+  // rarity fallback
   if (!rec.rarity) {
     const rarityRaw = `${rarityText} ${fullText}`;
     if (/SSR/i.test(rarityRaw)) rec.rarity = "SSR";
@@ -267,16 +260,44 @@ function parseHeroOverviewParts(parts) {
     else if (/\bR\b/i.test(rarityRaw)) rec.rarity = "R";
   }
 
-  // power
-  const powerMatch = String(powerText || fullText).match(/\b\d{1,3}(?:,\d{3})+\b/);
+  // power: prefer full OCR big comma number
+  const powerMatch =
+    String(fullText || "").match(/\b\d{1,3}(?:,\d{3})+\b/) ||
+    String(powerText || "").match(/\b\d{1,3}(?:,\d{3})+\b/);
+
   if (powerMatch) {
     rec.hero_power = cleanInt(powerMatch[0]);
   }
 
-  // escorts / level / capacity from dedicated crops
-  rec.escort_count = firstInt(escortText);
-  rec.level = firstInt(levelText);
-  rec.troop_capacity = firstInt(capacityText);
+  // summary row parsing:
+  // "Escorts Level Troops Capacity ... 10 ... 13,190"
+  const summaryNums = (String(summaryRowText || "").match(/\d[\d,]*/g) || [])
+    .map(cleanInt)
+    .filter(n => n > 0);
+
+  // first number = escorts, last number = troop capacity
+  if (summaryNums.length >= 1) rec.escort_count = summaryNums[0];
+  if (summaryNums.length >= 2) rec.troop_capacity = summaryNums[summaryNums.length - 1];
+
+  // level: dedicated crop first
+  const levelNums = (String(levelText || "").match(/\d+/g) || [])
+    .map(v => parseInt(v, 10))
+    .filter(v => !isNaN(v));
+
+  if (levelNums.length) {
+    rec.level = levelNums[0];
+  }
+
+  // fallback: search full OCR near the summary row for a 1-2 digit value between escorts and capacity
+  if (!rec.level) {
+    const fullNums = (String(fullText || "").match(/\d[\d,]*/g) || [])
+      .map(cleanInt)
+      .filter(n => n > 0 && n < 200);
+
+    // likely candidates for level are 2-digit numbers that are not escorts
+    const candidates = fullNums.filter(n => n !== rec.escort_count);
+    if (candidates.length) rec.level = candidates[0];
+  }
 
   if (!rec.hero_name) rec.review_flags.push("Missing hero_name");
   if (!rec.level) rec.review_flags.push("Missing level");
