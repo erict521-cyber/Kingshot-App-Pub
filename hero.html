@@ -148,14 +148,14 @@ function normalizeHeroName(name) {
 
 function getSkillSlotRegions() {
   return {
-    // x1, y1, x2, y2 as relative image coords
-    slot_1: [0.02, 0.22, 0.18, 0.35], // top-left
-    slot_2: [0.02, 0.39, 0.18, 0.52], // mid-left
-    slot_3: [0.02, 0.56, 0.18, 0.69], // bottom-left
+    // x1, y1, x2, y2
+    slot_1: [0.055, 0.300, 0.185, 0.365], // top-left level badge
+    slot_2: [0.055, 0.470, 0.185, 0.535], // mid-left
+    slot_3: [0.055, 0.640, 0.185, 0.705], // bottom-left
 
-    slot_4: [0.79, 0.22, 0.95, 0.35], // top-right
-    slot_5: [0.79, 0.39, 0.95, 0.52], // mid-right
-    slot_6: [0.79, 0.56, 0.95, 0.69]  // bottom-right
+    slot_4: [0.785, 0.300, 0.915, 0.365], // top-right
+    slot_5: [0.785, 0.470, 0.915, 0.535], // mid-right
+    slot_6: [0.785, 0.640, 0.915, 0.705]  // bottom-right
   };
 }
 
@@ -334,22 +334,25 @@ async function readHeroSkills() {
 
       const text = await ocrCanvas(
   crop,
-  "Lv.0123456789"
+  "LlVv.0123456789"
 );
 
       ocrDump += `\n--- ${slot} ---\n${text}\n`;
 
-      const levelMatch = text.match(/Lv\.?\s*(\d+)/i) || text.match(/(\d+)/);
+      const cleaned = text.replace(/\s+/g, " ").trim();
+const levelMatch =
+  cleaned.match(/Lv\.?\s*(\d)/i) ||
+  cleaned.match(/(\d)/);
 
 if (levelMatch) {
   results[slot] = {
     level: parseInt(levelMatch[1], 10),
-    locked: false
+    locked: null
   };
 } else {
   results[slot] = {
-    level: 1,
-    locked: true
+    level: null,
+    locked: null
   };
 }
 }
