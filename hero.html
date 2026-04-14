@@ -148,14 +148,14 @@ function normalizeHeroName(name) {
 
 function getSkillSlotRegions() {
   return {
-    // full icon boxes, x1 y1 x2 y2
-    slot_1: [0.03, 0.17, 0.22, 0.36], // top-left
-    slot_2: [0.03, 0.34, 0.22, 0.53], // mid-left
-    slot_3: [0.03, 0.51, 0.22, 0.70], // bottom-left
+    // x1, y1, x2, y2
+    slot_1: [0.03, 0.17, 0.22, 0.36],
+    slot_2: [0.03, 0.34, 0.22, 0.53],
+    slot_3: [0.03, 0.51, 0.22, 0.70],
 
-    slot_4: [0.76, 0.17, 0.95, 0.36], // top-right
-    slot_5: [0.76, 0.34, 0.95, 0.53], // mid-right
-    slot_6: [0.76, 0.51, 0.95, 0.70]  // bottom-right
+    slot_4: [0.76, 0.17, 0.95, 0.36],
+    slot_5: [0.76, 0.34, 0.95, 0.53],
+    slot_6: [0.76, 0.51, 0.95, 0.70]
   };
 }
 
@@ -383,62 +383,44 @@ async function readHeroSkills() {
     for (const [slot, coords] of Object.entries(regions)) {
       const iconCrop = cropCanvasRect(img, ...coords);
 
-      // badge is at bottom of skill icon
-      // ===== LOCK DETECTION (center of icon) =====
-const lockCrop = cropCanvas(iconCrop, 0.25, 0.20, 0.50, 0.45);
-const lockZoom = upscaleCanvas(lockCrop, 3);
+      // lock detection from center of icon
+      const lockCrop = cropCanvas(iconCrop, 0.25, 0.20, 0.50, 0.45);
+      const lockZoom = upscaleCanvas(lockCrop, 3);
+      const ctx = lockZoom.getContext("2d");
+      const imgData = ctx.getImageData(0, 0, lockZoom.width, lockZoom.height).data;
 
-// simple brightness check
-const ctx = lockZoom.getContext("2d");
-const imgData = ctx.getImageData(0, 0, lockZoom.width, lockZoom.height).data;
+      let brightPixels = 0;
+      for (let i = 0; i < imgData.length; i += 4) {
+        const avg = (imgData[i] + imgData[i + 1] + imgData[i + 2]) / 3;
+        if (avg > 220) brightPixels++;
+      }
 
-let brightPixels = 0;
-for (let i = 0; i < imgData.length; i += 4) {
-  const avg = (imgData[i] + imgData[i+1] + imgData[i+2]) / 3;
-  if (avg > 220) brightPixels++;
-}
+      const totalPixels = imgData.length / 4;
+      const isLocked = (brightPixels / totalPixels) > 0.08;
 
-const totalPixels = imgData.length / 4;
-const isLocked = (brightPixels / totalPixels) > 0.08; // tuned threshold
-
-
-
-// ===== LEVEL DETECTION (bottom-left badge) =====
-const badgeCrop = cropCanvas(iconCrop, 0.05, 0.60, 0.55, 0.30);
-const badgeZoom = upscaleCanvas(badgeCrop, 4);
-
-const text = await ocrCanvas(
-  badgeZoom,
-  "LlVv.0123456789"
-);
-
-const cleaned = text.replace(/\s+/g, " ").trim();
-
-const levelMatch =
-  cleaned.match(/Lv\.?\s*(\d)/i) ||
-  cleaned.match(/L[vVy]\.?\s*(\d)/i);
+      // level badge from lower-left area of icon
+      const badgeCrop = cropCanvas(iconCrop, 0.05, 0.60, 0.55, 0.30);
       const badgeZoom = upscaleCanvas(badgeCrop, 4);
 
-const text = await ocrCanvas(
-  badgeZoom,
-  "LlVv.0123456789"
-);
+      const text = await ocrCanvas(
+        badgeZoom,
+        "LlVv.0123456789"
+      );
 
       const cleaned = text.replace(/\s+/g, " ").trim();
 
       const levelMatch =
-  cleaned.match(/Lv\.?\s*(\d)/i) ||
-  cleaned.match(/L[vVy]\.?\s*(\d)/i);
+        cleaned.match(/Lv\.?\s*(\d)/i) ||
+        cleaned.match(/L[vVy]\.?\s*(\d)/i);
 
       results[slot] = {
-  level: isLocked ? null : (levelMatch ? parseInt(levelMatch[1], 10) : null),
-  locked: isLocked
-};
+        level: isLocked ? null : (levelMatch ? parseInt(levelMatch[1], 10) : null),
+        locked: isLocked
+      };
 
       ocrDump += `\n--- ${slot} ---\n${cleaned}\n`;
     }
 
-    // hero identity from screenshot itself
     const parsed = {
       hero_name: null,
       troop_type: null,
