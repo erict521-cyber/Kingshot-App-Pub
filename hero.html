@@ -130,8 +130,23 @@
       <button onclick="closeSkillsReview()">Cancel</button>
       <button onclick="confirmSkillsReview()">Confirm Skills</button>
     </div>
+
+<h3>Hero Gear</h3>
+
+<input type="file" id="heroGearFile" accept="image/*">
+<button onclick="readHeroGear()">Read Gear</button>
+
+<div id="heroGearStatus"></div>
+
+<h4>OCR Output</h4>
+<textarea id="heroGearOCR" rows="6" style="width:100%"></textarea>
+
+<h4>Parsed Output</h4>
+<textarea id="heroGearParsed" rows="10" style="width:100%"></textarea>
+
   </div>
 </div>
+
 
 <script>
 const DB_KEY = "kingshot_player_troops_capture_v1_db";
@@ -145,6 +160,22 @@ const HERO_LIBRARY = {
   jabel: { canonical_name: "Jabel", troop_type: "cavalry", rarity: "SSR" },
   saul: { canonical_name: "Saul", troop_type: "archers", rarity: "SSR" },
   zoe: { canonical_name: "Zoe", troop_type: "infantry", rarity: "SSR" }
+};
+
+const GEAR_SLOT_REGIONS = {
+  top_left: [0.061101, 0.279073, 0.220811, 0.349435],
+  bottom_left: [0.059891, 0.418679, 0.219601, 0.491275],
+  top_right: [0.778584, 0.276839, 0.939504, 0.351110],
+  bottom_right: [0.778584, 0.418679, 0.938294, 0.492391],
+  center_exclusive: [0.408348, 0.599051, 0.592257, 0.682814]
+};
+
+const GEAR_SLOT_TYPES = {
+  top_left: "helmet",
+  bottom_left: "armor",
+  top_right: "gloves",
+  bottom_right: "boots",
+  center_exclusive: "exclusive"
 };
 
 function setStatus(msg = "") {
@@ -633,6 +664,73 @@ function confirmSkillsReview() {
   document.getElementById("skillsReviewModal").style.display = "none";
   document.getElementById("heroSkillsStatus").textContent =
     "Hero skills reviewed. Ready to save.";
+}
+
+async function readHeroGear() {
+  const file = document.getElementById("heroGearFile").files[0];
+  if (!file) {
+    document.getElementById("heroGearStatus").textContent = "Choose a gear screenshot first.";
+    return;
+  }
+
+  document.getElementById("heroGearStatus").textContent = "Reading hero gear screenshot...";
+
+  try {
+    const img = await loadImageFromFile(file);
+
+    const regions = GEAR_SLOT_REGIONS;
+    const results = {};
+    const debugItems = [];
+
+    let ocrDump = "";
+
+    for (const [slot, coords] of Object.entries(regions)) {
+      const crop = cropCanvasRect(img, ...coords);
+      const zoom = upscaleCanvas(crop, 3);
+
+      debugItems.push({ label: `${slot}`, canvas: zoom });
+
+      // OCR for level + refine
+      const text = await ocrCanvas(
+        zoom,
+        "Lv.+0123456789"
+      );
+
+      const cleaned = text.replace(/\s+/g, " ").trim();
+
+      const levelMatch = cleaned.match(/Lv\.?\s*(\d+)/i);
+      const refineMatch = cleaned.match(/\+(\d+)/);
+
+      results[slot] = {
+        slot_type: GEAR_SLOT_TYPES[slot],
+        exists: true, // will refine later for exclusive
+        locked: false, // placeholder for now
+        equipped: true, // placeholder
+        rarity: null, // we’ll detect via color later
+        level: levelMatch ? parseInt(levelMatch[1], 10) : null,
+        refine: refineMatch ? parseInt(refineMatch[1], 10) : null
+      };
+
+      ocrDump += `\n--- ${slot} ---\n${cleaned}\n`;
+    }
+
+    const parsed = {
+      hero_name: null,
+      gear_slots: results
+    };
+
+    document.getElementById("heroGearOCR").value = ocrDump;
+    document.getElementById("heroGearParsed").value =
+      JSON.stringify(parsed, null, 2);
+
+    renderSkillDebug(debugItems); // reuse existing debug renderer
+
+    document.getElementById("heroGearStatus").textContent = "Hero gear parsed.";
+  } catch (err) {
+    console.error(err);
+    document.getElementById("heroGearStatus").textContent =
+      "Hero gear OCR failed: " + err.message;
+  }
 }
 
 function parseHeroOverviewParts(parts) {
