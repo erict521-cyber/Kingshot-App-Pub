@@ -97,6 +97,9 @@
   <h3>Hero Skills Parsed Output</h3>
   <textarea id="heroSkillsParsed"></textarea>
 
+<h3>Hero Skills Crop Debug</h3>
+<div id="heroSkillsDebug" style="display:grid;grid-template-columns:1fr 1fr;gap:8px;"></div>
+
   <button onclick="saveHeroSkills()">Save Hero Skills</button>
 </div>
 
@@ -149,13 +152,13 @@ function normalizeHeroName(name) {
 function getSkillSlotRegions() {
   return {
     // x1, y1, x2, y2
-    slot_1: [0.02, 0.16, 0.22, 0.36],
-    slot_2: [0.02, 0.33, 0.22, 0.53],
-    slot_3: [0.02, 0.50, 0.22, 0.70],
+    slot_1: [0.02, 0.17, 0.22, 0.36],
+    slot_2: [0.02, 0.34, 0.22, 0.53],
+    slot_3: [0.02, 0.51, 0.22, 0.70],
 
-    slot_4: [0.75, 0.16, 0.95, 0.36],
-    slot_5: [0.75, 0.33, 0.95, 0.53],
-    slot_6: [0.75, 0.50, 0.95, 0.70]
+    slot_4: [0.75, 0.17, 0.95, 0.36],
+    slot_5: [0.75, 0.34, 0.95, 0.53],
+    slot_6: [0.75, 0.51, 0.95, 0.70]
   };
 }
 
@@ -178,6 +181,38 @@ function upscaleCanvas(sourceCanvas, scale = 4) {
   );
 
   return canvas;
+}
+
+function canvasToDataUrl(canvas) {
+  return canvas.toDataURL("image/png");
+}
+
+function renderSkillDebug(debugItems) {
+  const container = document.getElementById("heroSkillsDebug");
+  container.innerHTML = "";
+
+  debugItems.forEach(item => {
+    const wrap = document.createElement("div");
+    wrap.style.border = "1px solid #ccc";
+    wrap.style.padding = "8px";
+    wrap.style.background = "#fff";
+
+    const title = document.createElement("div");
+    title.textContent = item.label;
+    title.style.fontWeight = "bold";
+    title.style.marginBottom = "6px";
+
+    const img = document.createElement("img");
+    img.src = canvasToDataUrl(item.canvas);
+    img.style.width = "100%";
+    img.style.display = "block";
+    img.style.border = "1px solid #ddd";
+    img.style.background = "#f7f7f7";
+
+    wrap.appendChild(title);
+    wrap.appendChild(img);
+    container.appendChild(wrap);
+  });
 }
 
 function thresholdCanvas(sourceCanvas, threshold = 165) {
@@ -378,66 +413,36 @@ async function readHeroSkills() {
 
     const regions = getSkillSlotRegions();
     const results = {};
+    const debugItems = [];
     let ocrDump = `--- HERO TOP OCR ---\n${heroTopText}\n`;
 
     for (const [slot, coords] of Object.entries(regions)) {
       const iconCrop = cropCanvasRect(img, ...coords);
 
-      // Try two different badge positions and keep the better OCR result
-      const badgeCropA = cropCanvas(iconCrop, 0.00, 0.56, 0.68, 0.34);
-      const badgeCropB = cropCanvas(iconCrop, 0.10, 0.58, 0.62, 0.28);
+      // Badge area inside the icon crop
+      const badgeCrop = cropCanvas(iconCrop, 0.00, 0.54, 0.68, 0.36);
+      const badgeZoom = upscaleCanvas(badgeCrop, 5);
 
-      const badgeZoomA = upscaleCanvas(badgeCropA, 5);
-      const badgeZoomB = upscaleCanvas(badgeCropB, 5);
+      debugItems.push({ label: `${slot} icon`, canvas: iconCrop });
+      debugItems.push({ label: `${slot} badge`, canvas: badgeZoom });
 
-      const textA = await ocrCanvas(badgeZoomA, "LlVv.0123456789");
-      const textB = await ocrCanvas(badgeZoomB, "LlVv.0123456789");
+      const text = await ocrCanvas(
+        badgeZoom,
+        "LlVv.0123456789"
+      );
 
-      const cleanedA = String(textA || "").replace(/\s+/g, " ").trim();
-      const cleanedB = String(textB || "").replace(/\s+/g, " ").trim();
+      const cleaned = String(text || "").replace(/\s+/g, " ").trim();
 
-      function parseLevel(text) {
-        return (
-          text.match(/Lv\.?\s*(\d)/i) ||
-          text.match(/L[vVy]\.?\s*(\d)/i) ||
-          text.match(/(\d)/)
-        );
-      }
-
-      const matchA = parseLevel(cleanedA);
-      const matchB = parseLevel(cleanedB);
-
-      let chosenText = "";
-      let chosenLevel = null;
-
-      if (matchA && !matchB) {
-        chosenText = cleanedA;
-        chosenLevel = parseInt(matchA[1], 10);
-      } else if (!matchA && matchB) {
-        chosenText = cleanedB;
-        chosenLevel = parseInt(matchB[1], 10);
-      } else if (matchA && matchB) {
-        // prefer the one that actually contains Lv
-        const scoreA = /Lv/i.test(cleanedA) ? 2 : 1;
-        const scoreB = /Lv/i.test(cleanedB) ? 2 : 1;
-
-        if (scoreA >= scoreB) {
-          chosenText = cleanedA;
-          chosenLevel = parseInt(matchA[1], 10);
-        } else {
-          chosenText = cleanedB;
-          chosenLevel = parseInt(matchB[1], 10);
-        }
-      } else {
-        chosenText = `${cleanedA} || ${cleanedB}`;
-      }
+      const levelMatch =
+        cleaned.match(/Lv\.?\s*(\d)/i) ||
+        cleaned.match(/L[vVy]\.?\s*(\d)/i);
 
       results[slot] = {
-        level: chosenLevel,
+        level: levelMatch ? parseInt(levelMatch[1], 10) : null,
         locked: null
       };
 
-      ocrDump += `\n--- ${slot} ---\n${chosenText}\n`;
+      ocrDump += `\n--- ${slot} ---\n${cleaned}\n`;
     }
 
     const parsed = {
@@ -460,6 +465,8 @@ async function readHeroSkills() {
     document.getElementById("heroSkillsOCR").value = ocrDump;
     document.getElementById("heroSkillsParsed").value =
       JSON.stringify(parsed, null, 2);
+
+    renderSkillDebug(debugItems);
 
     document.getElementById("heroSkillsStatus").textContent = "Hero skills parsed.";
   } catch (err) {
