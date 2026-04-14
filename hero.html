@@ -103,11 +103,43 @@
   <button onclick="saveHeroSkills()">Save Hero Skills</button>
 </div>
 
+<div id="skillsReviewModal" style="
+  display:none;
+  position:fixed;
+  inset:0;
+  background:rgba(0,0,0,0.65);
+  z-index:9999;
+  align-items:center;
+  justify-content:center;
+  padding:16px;
+">
+  <div style="
+    background:#fff;
+    width:min(520px, 100%);
+    max-height:85vh;
+    overflow:auto;
+    border-radius:12px;
+    padding:16px;
+    box-sizing:border-box;
+  ">
+    <h3 style="margin-top:0;">Review Hero Skills</h3>
+    <div id="skillsReviewHeader" style="margin-bottom:12px;"></div>
+    <div id="skillsReviewBody"></div>
+
+    <div style="display:flex; gap:8px; margin-top:16px;">
+      <button onclick="closeSkillsReview()">Cancel</button>
+      <button onclick="confirmSkillsReview()">Confirm Skills</button>
+    </div>
+  </div>
+</div>
+
 <script>
 const DB_KEY = "kingshot_player_troops_capture_v1_db";
 let currentHero = null;
 let currentHeroOverview = null;
 let currentHeroStats = null;
+let currentHeroSkillsParsed = null;
+let pendingSkillsReview = null;
 
 const HERO_LIBRARY = {
   jabel: { canonical_name: "Jabel", troop_type: "cavalry", rarity: "SSR" },
@@ -487,17 +519,120 @@ results[slot] = {
     }
 
     document.getElementById("heroSkillsOCR").value = ocrDump;
-    document.getElementById("heroSkillsParsed").value =
-      JSON.stringify(parsed, null, 2);
+document.getElementById("heroSkillsParsed").value =
+  JSON.stringify(parsed, null, 2);
 
-    renderSkillDebug(debugItems);
+currentHeroSkillsParsed = parsed;
 
-    document.getElementById("heroSkillsStatus").textContent = "Hero skills parsed.";
+renderSkillDebug(debugItems);
+openSkillsReview(parsed);
+
+document.getElementById("heroSkillsStatus").textContent = "Hero skills parsed. Review before saving.";
   } catch (err) {
     console.error(err);
     document.getElementById("heroSkillsStatus").textContent =
       "Hero skills OCR failed: " + err.message;
   }
+}
+
+function openSkillsReview(parsed) {
+  pendingSkillsReview = JSON.parse(JSON.stringify(parsed));
+
+  const header = document.getElementById("skillsReviewHeader");
+  header.innerHTML = `
+    <div><b>Hero:</b> ${parsed.hero_name || "Unknown"}</div>
+    <div><b>Troop Type:</b> ${parsed.troop_type || "Unknown"}</div>
+    <div><b>Rarity:</b> ${parsed.rarity || "Unknown"}</div>
+  `;
+
+  const body = document.getElementById("skillsReviewBody");
+  body.innerHTML = "";
+
+  const slotOrder = ["slot_1", "slot_2", "slot_3", "slot_4", "slot_5", "slot_6"];
+
+  for (const slot of slotOrder) {
+    const slotData = pendingSkillsReview.slots?.[slot] || { level: null, locked: false };
+
+    const row = document.createElement("div");
+    row.style.border = "1px solid #ddd";
+    row.style.borderRadius = "10px";
+    row.style.padding = "10px";
+    row.style.marginBottom = "10px";
+
+    row.innerHTML = `
+      <div style="font-weight:bold; margin-bottom:8px;">${slot.replace("_", " ").toUpperCase()}</div>
+
+      <label style="display:flex; align-items:center; gap:8px; margin-bottom:8px;">
+        <input type="checkbox" id="${slot}_locked_toggle" ${slotData.locked ? "checked" : ""}>
+        Locked
+      </label>
+
+      <label style="display:block;">
+        Level:
+        <select id="${slot}_level_select" style="margin-left:8px;">
+          <option value="">--</option>
+          <option value="1" ${slotData.level === 1 ? "selected" : ""}>1</option>
+          <option value="2" ${slotData.level === 2 ? "selected" : ""}>2</option>
+          <option value="3" ${slotData.level === 3 ? "selected" : ""}>3</option>
+          <option value="4" ${slotData.level === 4 ? "selected" : ""}>4</option>
+          <option value="5" ${slotData.level === 5 ? "selected" : ""}>5</option>
+        </select>
+      </label>
+    `;
+
+    body.appendChild(row);
+
+    const lockedToggle = row.querySelector(`#${slot}_locked_toggle`);
+    const levelSelect = row.querySelector(`#${slot}_level_select`);
+
+    function syncSlotUi() {
+      if (lockedToggle.checked) {
+        levelSelect.value = "1";
+        levelSelect.disabled = true;
+      } else {
+        levelSelect.disabled = false;
+      }
+    }
+
+    lockedToggle.addEventListener("change", syncSlotUi);
+    syncSlotUi();
+  }
+
+  document.getElementById("skillsReviewModal").style.display = "flex";
+}
+
+function closeSkillsReview() {
+  document.getElementById("skillsReviewModal").style.display = "none";
+  pendingSkillsReview = null;
+}
+
+function confirmSkillsReview() {
+  if (!pendingSkillsReview?.slots) return;
+
+  const slotOrder = ["slot_1", "slot_2", "slot_3", "slot_4", "slot_5", "slot_6"];
+
+  for (const slot of slotOrder) {
+    const lockedToggle = document.getElementById(`${slot}_locked_toggle`);
+    const levelSelect = document.getElementById(`${slot}_level_select`);
+
+    const locked = !!lockedToggle?.checked;
+    const rawLevel = levelSelect?.value;
+    const level = rawLevel ? parseInt(rawLevel, 10) : null;
+
+    pendingSkillsReview.slots[slot] = {
+      level: locked ? 1 : level,
+      locked
+    };
+  }
+
+  currentHeroSkillsParsed = JSON.parse(JSON.stringify(pendingSkillsReview));
+
+  document.getElementById("heroSkillsParsed").value =
+    JSON.stringify(currentHeroSkillsParsed, null, 2);
+
+  document.getElementById("skillsReviewModal").style.display = "none";
+  document.getElementById("heroSkillsStatus").textContent =
+    "Hero skills reviewed. Ready to save.";
 }
 
 function parseHeroOverviewParts(parts) {
@@ -975,12 +1110,11 @@ function saveHeroStats() {
 }
 
 function saveHeroSkills() {
-  const parsed = JSON.parse(
+  const parsed = currentHeroSkillsParsed || JSON.parse(
     document.getElementById("heroSkillsParsed").value
   );
 
   const heroName = parsed.hero_name || currentHero?.hero_name;
-
   if (!heroName) {
     alert("No hero selected");
     return;
@@ -1000,14 +1134,17 @@ function saveHeroSkills() {
     if (!skillMeta) continue;
 
     mappedSkills[skillMeta.name] = {
+      slot,
       level: data.level,
       locked: data.locked
     };
   }
 
+  currentHero = currentHero || {};
   currentHero.skills = mappedSkills;
 
   alert("Hero skills saved");
+  document.getElementById("heroSkillsStatus").textContent = "Hero skills saved.";
 }
 
 </script>
