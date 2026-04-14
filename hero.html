@@ -149,13 +149,13 @@ function normalizeHeroName(name) {
 function getSkillSlotRegions() {
   return {
     // x1, y1, x2, y2
-    slot_1: [0.03, 0.17, 0.22, 0.36],
-    slot_2: [0.03, 0.34, 0.22, 0.53],
-    slot_3: [0.03, 0.51, 0.22, 0.70],
+    slot_1: [0.02, 0.16, 0.22, 0.36],
+    slot_2: [0.02, 0.33, 0.22, 0.53],
+    slot_3: [0.02, 0.50, 0.22, 0.70],
 
-    slot_4: [0.76, 0.17, 0.95, 0.36],
-    slot_5: [0.76, 0.34, 0.95, 0.53],
-    slot_6: [0.76, 0.51, 0.95, 0.70]
+    slot_4: [0.75, 0.16, 0.95, 0.36],
+    slot_5: [0.75, 0.33, 0.95, 0.53],
+    slot_6: [0.75, 0.50, 0.95, 0.70]
   };
 }
 
@@ -383,42 +383,61 @@ async function readHeroSkills() {
     for (const [slot, coords] of Object.entries(regions)) {
       const iconCrop = cropCanvasRect(img, ...coords);
 
-      // lock detection from center of icon
-      const lockCrop = cropCanvas(iconCrop, 0.25, 0.20, 0.50, 0.45);
-      const lockZoom = upscaleCanvas(lockCrop, 3);
-      const ctx = lockZoom.getContext("2d");
-      const imgData = ctx.getImageData(0, 0, lockZoom.width, lockZoom.height).data;
+      // Try two different badge positions and keep the better OCR result
+      const badgeCropA = cropCanvas(iconCrop, 0.00, 0.56, 0.68, 0.34);
+      const badgeCropB = cropCanvas(iconCrop, 0.10, 0.58, 0.62, 0.28);
 
-      let brightPixels = 0;
-      for (let i = 0; i < imgData.length; i += 4) {
-        const avg = (imgData[i] + imgData[i + 1] + imgData[i + 2]) / 3;
-        if (avg > 220) brightPixels++;
+      const badgeZoomA = upscaleCanvas(badgeCropA, 5);
+      const badgeZoomB = upscaleCanvas(badgeCropB, 5);
+
+      const textA = await ocrCanvas(badgeZoomA, "LlVv.0123456789");
+      const textB = await ocrCanvas(badgeZoomB, "LlVv.0123456789");
+
+      const cleanedA = String(textA || "").replace(/\s+/g, " ").trim();
+      const cleanedB = String(textB || "").replace(/\s+/g, " ").trim();
+
+      function parseLevel(text) {
+        return (
+          text.match(/Lv\.?\s*(\d)/i) ||
+          text.match(/L[vVy]\.?\s*(\d)/i) ||
+          text.match(/(\d)/)
+        );
       }
 
-      const totalPixels = imgData.length / 4;
-      const isLocked = (brightPixels / totalPixels) > 0.08;
+      const matchA = parseLevel(cleanedA);
+      const matchB = parseLevel(cleanedB);
 
-      // level badge from lower-left area of icon
-      const badgeCrop = cropCanvas(iconCrop, 0.05, 0.60, 0.55, 0.30);
-      const badgeZoom = upscaleCanvas(badgeCrop, 4);
+      let chosenText = "";
+      let chosenLevel = null;
 
-      const text = await ocrCanvas(
-        badgeZoom,
-        "LlVv.0123456789"
-      );
+      if (matchA && !matchB) {
+        chosenText = cleanedA;
+        chosenLevel = parseInt(matchA[1], 10);
+      } else if (!matchA && matchB) {
+        chosenText = cleanedB;
+        chosenLevel = parseInt(matchB[1], 10);
+      } else if (matchA && matchB) {
+        // prefer the one that actually contains Lv
+        const scoreA = /Lv/i.test(cleanedA) ? 2 : 1;
+        const scoreB = /Lv/i.test(cleanedB) ? 2 : 1;
 
-      const cleaned = text.replace(/\s+/g, " ").trim();
-
-      const levelMatch =
-        cleaned.match(/Lv\.?\s*(\d)/i) ||
-        cleaned.match(/L[vVy]\.?\s*(\d)/i);
+        if (scoreA >= scoreB) {
+          chosenText = cleanedA;
+          chosenLevel = parseInt(matchA[1], 10);
+        } else {
+          chosenText = cleanedB;
+          chosenLevel = parseInt(matchB[1], 10);
+        }
+      } else {
+        chosenText = `${cleanedA} || ${cleanedB}`;
+      }
 
       results[slot] = {
-        level: isLocked ? null : (levelMatch ? parseInt(levelMatch[1], 10) : null),
-        locked: isLocked
+        level: chosenLevel,
+        locked: null
       };
 
-      ocrDump += `\n--- ${slot} ---\n${cleaned}\n`;
+      ocrDump += `\n--- ${slot} ---\n${chosenText}\n`;
     }
 
     const parsed = {
