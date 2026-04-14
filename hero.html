@@ -151,14 +151,13 @@ function normalizeHeroName(name) {
 
 function getSkillSlotRegions() {
   return {
-    // x1, y1, x2, y2
-    slot_1: [0.02, 0.17, 0.22, 0.36],
-    slot_2: [0.02, 0.34, 0.22, 0.53],
-    slot_3: [0.02, 0.51, 0.22, 0.70],
+    slot_1: [0.02, 0.14, 0.24, 0.34],
+    slot_2: [0.02, 0.31, 0.24, 0.51],
+    slot_3: [0.02, 0.48, 0.24, 0.68],
 
-    slot_4: [0.75, 0.17, 0.95, 0.36],
-    slot_5: [0.75, 0.34, 0.95, 0.53],
-    slot_6: [0.75, 0.51, 0.95, 0.70]
+    slot_4: [0.74, 0.14, 0.96, 0.34],
+    slot_5: [0.74, 0.31, 0.96, 0.51],
+    slot_6: [0.74, 0.48, 0.96, 0.68]
   };
 }
 
@@ -420,7 +419,7 @@ async function readHeroSkills() {
       const iconCrop = cropCanvasRect(img, ...coords);
 
       // Badge area inside the icon crop
-      const badgeCrop = cropCanvas(iconCrop, 0.20, 0.62, 0.60, 0.30);
+      const badgeCrop = cropCanvas(iconCrop, 0.05, 0.60, 0.50, 0.35);
       const badgeZoom = upscaleCanvas(badgeCrop, 5);
 
       debugItems.push({ label: `${slot} icon`, canvas: iconCrop });
