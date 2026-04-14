@@ -151,13 +151,13 @@ function normalizeHeroName(name) {
 
 function getSkillSlotRegions() {
   return {
-    slot_1: [0.02, 0.14, 0.24, 0.34],
-    slot_2: [0.02, 0.31, 0.24, 0.51],
-    slot_3: [0.02, 0.48, 0.24, 0.68],
+    slot_1: [0.10, 0.26, 0.22, 0.38],
+    slot_2: [0.08, 0.42, 0.20, 0.54],
+    slot_3: [0.10, 0.58, 0.22, 0.70],
 
-    slot_4: [0.74, 0.14, 0.96, 0.34],
-    slot_5: [0.74, 0.31, 0.96, 0.51],
-    slot_6: [0.74, 0.48, 0.96, 0.68]
+    slot_4: [0.78, 0.26, 0.90, 0.38],
+    slot_5: [0.80, 0.42, 0.92, 0.54],
+    slot_6: [0.78, 0.58, 0.90, 0.70]
   };
 }
 
@@ -419,27 +419,25 @@ async function readHeroSkills() {
       const iconCrop = cropCanvasRect(img, ...coords);
 
       // Badge area inside the icon crop
-      const badgeCrop = cropCanvas(iconCrop, 0.05, 0.60, 0.50, 0.35);
+      const badgeCrop = cropCanvas(iconCrop, 0.22, 0.65, 0.56, 0.28);
       const badgeZoom = upscaleCanvas(badgeCrop, 5);
 
       debugItems.push({ label: `${slot} icon`, canvas: iconCrop });
       debugItems.push({ label: `${slot} badge`, canvas: badgeZoom });
 
       const text = await ocrCanvas(
-        badgeZoom,
-        "LlVv.0123456789"
+  badgeZoom,
+  "Lv.0123456789"
       );
 
-      const cleaned = String(text || "").replace(/\s+/g, " ").trim();
+      const cleaned = text.replace(/\s+/g, " ").trim();
 
-      const levelMatch =
-        cleaned.match(/Lv\.?\s*(\d)/i) ||
-        cleaned.match(/L[vVy]\.?\s*(\d)/i);
+const levelMatch = cleaned.match(/Lv\.?\s*(\d)/i);
 
-      results[slot] = {
-        level: levelMatch ? parseInt(levelMatch[1], 10) : null,
-        locked: null
-      };
+results[slot] = {
+  level: levelMatch ? parseInt(levelMatch[1], 10) : null,
+  locked: null
+};
 
       ocrDump += `\n--- ${slot} ---\n${cleaned}\n`;
     }
