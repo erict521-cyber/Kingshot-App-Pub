@@ -384,7 +384,7 @@ async function readHeroSkills() {
       const iconCrop = cropCanvasRect(img, ...coords);
 
       // badge is at bottom of skill icon
-      const badgeCrop = cropCanvas(iconCrop, 0.18, 0.62, 0.64, 0.26);
+      const badgeCrop = cropCanvas(iconCrop, 0.00, 0.58, 0.62, 0.34);
       const badgeZoom = upscaleCanvas(badgeCrop, 4);
       const badgeBW = thresholdCanvas(badgeZoom, 160);
 
