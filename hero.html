@@ -420,7 +420,7 @@ async function readHeroSkills() {
       const iconCrop = cropCanvasRect(img, ...coords);
 
       // Badge area inside the icon crop
-      const badgeCrop = cropCanvas(iconCrop, 0.00, 0.54, 0.68, 0.36);
+      const badgeCrop = cropCanvas(iconCrop, 0.20, 0.62, 0.60, 0.30);
       const badgeZoom = upscaleCanvas(badgeCrop, 5);
 
       debugItems.push({ label: `${slot} icon`, canvas: iconCrop });
