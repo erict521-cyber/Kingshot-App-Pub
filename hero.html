@@ -418,6 +418,29 @@ async function readHeroSkills() {
     for (const [slot, coords] of Object.entries(regions)) {
       const iconCrop = cropCanvasRect(img, ...coords);
 
+// --- LOCK DETECTION (add this block) ---
+const lockCrop = cropCanvas(iconCrop, 0.22, 0.18, 0.56, 0.46);
+const lockZoom = upscaleCanvas(lockCrop, 3);
+
+// optional OCR (not required but useful for debugging)
+const lockText = await ocrCanvas(
+  lockZoom,
+  "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
+);
+
+// brightness-based detection (this is the real signal)
+const lockCtx = lockZoom.getContext("2d");
+const lockData = lockCtx.getImageData(0, 0, lockZoom.width, lockZoom.height).data;
+
+let brightPixels = 0;
+for (let i = 0; i < lockData.length; i += 4) {
+  const avg = (lockData[i] + lockData[i + 1] + lockData[i + 2]) / 3;
+  if (avg > 220) brightPixels++;
+}
+
+const lockRatio = brightPixels / (lockData.length / 4);
+const isLocked = lockRatio > 0.12;
+
       // Badge area inside the icon crop
       const badgeCrop = cropCanvas(iconCrop, 0.18, 0.68, 0.64, 0.24);
       const badgeZoom = upscaleCanvas(badgeCrop, 5);
