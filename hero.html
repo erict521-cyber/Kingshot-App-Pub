@@ -159,6 +159,10 @@ function getSkillSlotRegions() {
   };
 }
 
+function cropCanvasRect(source, x1, y1, x2, y2) {
+  return cropCanvas(source, x1, y1, x2 - x1, y2 - y1);
+}
+
 async function readHero() {
   const file = document.getElementById("heroFile").files[0];
   if (!file) {
@@ -326,7 +330,7 @@ async function readHeroSkills() {
     let results = {};
 
     for (const [slot, coords] of Object.entries(regions)) {
-      const crop = cropCanvas(img, ...coords);
+      const crop = cropCanvasRect(img, ...coords);
 
       const text = await ocrCanvas(
   crop,
