@@ -149,18 +149,34 @@ function normalizeHeroName(name) {
 function getSkillSlotRegions() {
   return {
     // x1, y1, x2, y2
-    slot_1: [0.045, 0.285, 0.205, 0.355], // top-left badge
-    slot_2: [0.045, 0.455, 0.205, 0.525], // mid-left
-    slot_3: [0.045, 0.625, 0.205, 0.695], // bottom-left
+    slot_1: [0.055, 0.275, 0.215, 0.345], // top-left badge
+    slot_2: [0.055, 0.445, 0.215, 0.515], // mid-left
+    slot_3: [0.055, 0.605, 0.215, 0.675], // bottom-left
 
-    slot_4: [0.765, 0.285, 0.925, 0.355], // top-right badge
-    slot_5: [0.765, 0.455, 0.925, 0.525], // mid-right
-    slot_6: [0.765, 0.625, 0.925, 0.695]  // bottom-right
+    slot_4: [0.760, 0.285, 0.930, 0.355], // top-right badge
+    slot_5: [0.760, 0.455, 0.930, 0.525], // mid-right
+    slot_6: [0.760, 0.625, 0.930, 0.695]  // bottom-right
   };
 }
 
 function cropCanvasRect(source, x1, y1, x2, y2) {
   return cropCanvas(source, x1, y1, x2 - x1, y2 - y1);
+}
+function upscaleCanvas(sourceCanvas, scale = 3) {
+  const canvas = document.createElement("canvas");
+  const ctx = canvas.getContext("2d");
+
+  canvas.width = sourceCanvas.width * scale;
+  canvas.height = sourceCanvas.height * scale;
+
+  ctx.imageSmoothingEnabled = false;
+  ctx.drawImage(
+    sourceCanvas,
+    0, 0, sourceCanvas.width, sourceCanvas.height,
+    0, 0, canvas.width, canvas.height
+  );
+
+  return canvas;
 }
 
 async function readHero() {
@@ -331,9 +347,10 @@ async function readHeroSkills() {
 
     for (const [slot, coords] of Object.entries(regions)) {
       const crop = cropCanvasRect(img, ...coords);
+const zoomedCrop = upscaleCanvas(crop, 3);
 
       const text = await ocrCanvas(
-  crop,
+  zoomedCrop,
   "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789.:"
 );
 
