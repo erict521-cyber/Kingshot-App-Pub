@@ -459,7 +459,7 @@ const levelMatch = cleaned.match(/Lv\.?\s*(\d)/i);
 
 results[slot] = {
   level: levelMatch ? parseInt(levelMatch[1], 10) : null,
-  locked: null
+  locked: isLocked
 };
 
       ocrDump += `\n--- ${slot} ---\n${cleaned}\n`;
