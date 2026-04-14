@@ -149,13 +149,13 @@ function normalizeHeroName(name) {
 function getSkillSlotRegions() {
   return {
     // x1, y1, x2, y2
-    slot_1: [0.055, 0.300, 0.185, 0.365], // top-left level badge
-    slot_2: [0.055, 0.470, 0.185, 0.535], // mid-left
-    slot_3: [0.055, 0.640, 0.185, 0.705], // bottom-left
+    slot_1: [0.060, 0.255, 0.185, 0.305], // top-left badge
+    slot_2: [0.060, 0.415, 0.185, 0.465], // mid-left badge
+    slot_3: [0.060, 0.575, 0.185, 0.625], // bottom-left badge
 
-    slot_4: [0.785, 0.300, 0.915, 0.365], // top-right
-    slot_5: [0.785, 0.470, 0.915, 0.535], // mid-right
-    slot_6: [0.785, 0.640, 0.915, 0.705]  // bottom-right
+    slot_4: [0.785, 0.255, 0.910, 0.305], // top-right badge
+    slot_5: [0.785, 0.415, 0.910, 0.465], // mid-right badge
+    slot_6: [0.785, 0.575, 0.910, 0.625]  // bottom-right badge
   };
 }
 
@@ -340,20 +340,16 @@ async function readHeroSkills() {
       ocrDump += `\n--- ${slot} ---\n${text}\n`;
 
       const cleaned = text.replace(/\s+/g, " ").trim();
+
 const levelMatch =
   cleaned.match(/Lv\.?\s*(\d)/i) ||
+  cleaned.match(/L[vVy]\.?\s*(\d)/i) ||
   cleaned.match(/(\d)/);
 
-if (levelMatch) {
-  results[slot] = {
-    level: parseInt(levelMatch[1], 10),
-    locked: null
-  };
-} else {
-  results[slot] = {
-    level: null,
-    locked: null
-  };
+results[slot] = {
+  level: levelMatch ? parseInt(levelMatch[1], 10) : null,
+  locked: null
+};
 }
 }
 
