@@ -341,39 +341,59 @@ async function readHeroSkills() {
   try {
     const img = await loadImageFromFile(file);
 
-    const regions = getSkillSlotRegions();
-    let ocrDump = "";
-    let results = {};
+    // top strip just for hero name
+    const heroTopCanvas = cropCanvasRect(img, 0.22, 0.00, 0.78, 0.12);
 
-    for (const [slot, coords] of Object.entries(regions)) {
-      const crop = cropCanvasRect(img, ...coords);
-const zoomedCrop = upscaleCanvas(crop, 3);
+    // left and right skill columns, large enough to capture all 3 badges
+    const leftSkillsCanvas  = cropCanvasRect(img, 0.00, 0.18, 0.30, 0.74);
+    const rightSkillsCanvas = cropCanvasRect(img, 0.70, 0.18, 1.00, 0.74);
 
-      const text = await ocrCanvas(
-  zoomedCrop,
-  "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789.:"
-);
+    const heroTopZoom = upscaleCanvas(heroTopCanvas, 3);
+    const leftZoom = upscaleCanvas(leftSkillsCanvas, 3);
+    const rightZoom = upscaleCanvas(rightSkillsCanvas, 3);
 
-      ocrDump += `\n--- ${slot} ---\n${text}\n`;
+    const heroTopText = await ocrCanvas(
+      heroTopZoom,
+      "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
+    );
 
-      const cleaned = text.replace(/\s+/g, " ").trim();
+    const leftText = await ocrCanvas(
+      leftZoom,
+      "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789.:"
+    );
 
-const levelMatch =
-  cleaned.match(/Lv\.?\s*(\d)/i) ||
-  cleaned.match(/L[vVy]\.?\s*(\d)/i) ||
-  cleaned.match(/(\d)/);
+    const rightText = await ocrCanvas(
+      rightZoom,
+      "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789.:"
+    );
 
-results[slot] = {
-  level: levelMatch ? parseInt(levelMatch[1], 10) : null,
-  locked: null
-};
-}
+    const fullResult = await Tesseract.recognize(file, "eng");
+    const fullText = fullResult.data.text || "";
 
+    const parsed = parseHeroSkillsColumns({
+      heroTopText,
+      leftText,
+      rightText,
+      fullText
+    });
 
+    const debugText = [
+      "--- HERO TOP OCR ---",
+      heroTopText,
+      "",
+      "--- LEFT COLUMN OCR ---",
+      leftText,
+      "",
+      "--- RIGHT COLUMN OCR ---",
+      rightText,
+      "",
+      "--- FULL OCR ---",
+      fullText
+    ].join("\n");
 
-    document.getElementById("heroSkillsOCR").value = ocrDump;
+    document.getElementById("heroSkillsOCR").value = debugText;
     document.getElementById("heroSkillsParsed").value =
-      JSON.stringify(results, null, 2);
+      JSON.stringify(parsed, null, 2);
 
     document.getElementById("heroSkillsStatus").textContent = "Hero skills parsed.";
   } catch (err) {
@@ -382,6 +402,7 @@ results[slot] = {
       "Hero skills OCR failed: " + err.message;
   }
 }
+
 function parseHeroOverviewParts(parts) {
   const {
     nameText = "",
@@ -517,6 +538,7 @@ if (levelNums.length) {
 
   return rec;
 }
+
 function parseHeroStatsParts(parts) {
   const {
     heroTopText = "",
@@ -702,6 +724,66 @@ if (matchedMeta) {
   return rec;
 }
 
+function parseHeroSkillsColumns(parts) {
+  const {
+    heroTopText = "",
+    leftText = "",
+    rightText = "",
+    fullText = ""
+  } = parts || {};
+
+  const rec = {
+    hero_name: null,
+    troop_type: null,
+    rarity: null,
+    slots: {
+      slot_1: { level: null, locked: null },
+      slot_2: { level: null, locked: null },
+      slot_3: { level: null, locked: null },
+      slot_4: { level: null, locked: null },
+      slot_5: { level: null, locked: null },
+      slot_6: { level: null, locked: null }
+    }
+  };
+
+  // hero identity from top crop or full OCR
+  const topNorm = normalizeHeroName(heroTopText);
+  const fullNorm = normalizeHeroName(fullText);
+
+  for (const [key, meta] of Object.entries(HERO_LIBRARY)) {
+    if (topNorm.includes(key) || fullNorm.includes(key)) {
+      rec.hero_name = meta.canonical_name;
+      rec.troop_type = meta.troop_type;
+      rec.rarity = meta.rarity;
+      break;
+    }
+  }
+
+  function extractOrderedLevels(text) {
+    const cleaned = String(text || "").replace(/\s+/g, " ");
+    const matches = [...cleaned.matchAll(/Lv\.?\s*(\d)/gi)].map(m => parseInt(m[1], 10));
+
+    // fallback if OCR missed "Lv." but still saw isolated digits near badges
+    if (matches.length) return matches;
+
+    return [];
+  }
+
+  const leftLevels = extractOrderedLevels(leftText);
+  const rightLevels = extractOrderedLevels(rightText);
+
+  // order is top -> middle -> bottom
+  rec.slots.slot_1.level = leftLevels[0] ?? null;
+  rec.slots.slot_2.level = leftLevels[1] ?? null;
+  rec.slots.slot_3.level = leftLevels[2] ?? null;
+
+  rec.slots.slot_4.level = rightLevels[0] ?? null;
+  rec.slots.slot_5.level = rightLevels[1] ?? null;
+  rec.slots.slot_6.level = rightLevels[2] ?? null;
+
+  return rec;
+}
+
 async function loadImageFromFile(file) {
   return new Promise((resolve, reject) => {
     const img = new Image();
@@ -800,13 +882,14 @@ function saveHeroSkills() {
     document.getElementById("heroSkillsParsed").value
   );
 
-  const heroName = currentHero?.hero_name;
-  if (!heroName) {
-    alert("No hero selected");
-    return;
-  }
+  const heroName = parsed.hero_name || currentHero?.hero_name;
 
-  const heroKey = heroName.toLowerCase();
+if (!heroName) {
+  alert("No hero selected");
+  return;
+}
+
+const heroKey = heroName.toLowerCase();
 
   const library = HERO_LIBRARY[heroKey];
   if (!library) {
@@ -816,7 +899,7 @@ function saveHeroSkills() {
 
   const mappedSkills = {};
 
-  for (const [slot, data] of Object.entries(parsed)) {
+  for (const [slot, data] of Object.entries(parsed.slots || {})) {
     const skillMeta = library.skills[slot];
     if (!skillMeta) continue;
 
