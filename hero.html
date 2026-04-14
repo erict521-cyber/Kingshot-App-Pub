@@ -334,7 +334,7 @@ async function readHeroSkills() {
 
       const text = await ocrCanvas(
   crop,
-  "LlVv.0123456789"
+  "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789.:"
 );
 
       ocrDump += `\n--- ${slot} ---\n${text}\n`;
