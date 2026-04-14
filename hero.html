@@ -310,42 +310,55 @@ async function readHeroStats() {
 
 async function readHeroSkills() {
   const file = document.getElementById("heroSkillsFile").files[0];
-  if (!file) return;
-
-  const img = await loadImage(file);
-
-  const regions = getSkillSlotRegions();
-  let ocrDump = "";
-  let results = {};
-
-  for (const [slot, coords] of Object.entries(regions)) {
-    const crop = cropCanvas(img, ...coords);
-
-    const text = await ocrCanvas(
-      crop,
-      "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789."
-    );
-
-    ocrDump += `\n--- ${slot} ---\n${text}\n`;
-
-    const levelMatch = text.match(/Lv\.?\s*(\d+)/i);
-
-    if (levelMatch) {
-      results[slot] = {
-        level: parseInt(levelMatch[1]),
-        locked: false
-      };
-    } else {
-      results[slot] = {
-        level: null,
-        locked: true
-      };
-    }
+  if (!file) {
+    document.getElementById("heroSkillsStatus").textContent = "Choose a hero skills screenshot first.";
+    return;
   }
 
-  document.getElementById("heroSkillsOCR").value = ocrDump;
-  document.getElementById("heroSkillsParsed").value =
-    JSON.stringify(results, null, 2);
+  document.getElementById("heroSkillsStatus").textContent = "Reading hero skills screenshot...";
+
+  try {
+    const img = await loadImageFromFile(file);
+
+    const regions = getSkillSlotRegions();
+    let ocrDump = "";
+    let results = {};
+
+    for (const [slot, coords] of Object.entries(regions)) {
+      const crop = cropCanvas(img, ...coords);
+
+      const text = await ocrCanvas(
+        crop,
+        "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789.Lv"
+      );
+
+      ocrDump += `\n--- ${slot} ---\n${text}\n`;
+
+      const levelMatch = text.match(/Lv\.?\s*(\d+)/i);
+
+      if (levelMatch) {
+        results[slot] = {
+          level: parseInt(levelMatch[1], 10),
+          locked: false
+        };
+      } else {
+        results[slot] = {
+          level: 1,
+          locked: true
+        };
+      }
+    }
+
+    document.getElementById("heroSkillsOCR").value = ocrDump;
+    document.getElementById("heroSkillsParsed").value =
+      JSON.stringify(results, null, 2);
+
+    document.getElementById("heroSkillsStatus").textContent = "Hero skills parsed.";
+  } catch (err) {
+    console.error(err);
+    document.getElementById("heroSkillsStatus").textContent =
+      "Hero skills OCR failed: " + err.message;
+  }
 }
 function parseHeroOverviewParts(parts) {
   const {
