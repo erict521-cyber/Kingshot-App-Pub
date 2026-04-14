@@ -129,21 +129,22 @@
     <div style="display:flex; gap:8px; margin-top:16px;">
       <button onclick="closeSkillsReview()">Cancel</button>
       <button onclick="confirmSkillsReview()">Confirm Skills</button>
-
-<h3>Hero Gear</h3>
-
-<input type="file" id="heroGearFile" accept="image/*">
-<button onclick="readHeroGear()">Read Gear</button>
-
-<div id="heroGearStatus"></div>
-
-<h4>OCR Output</h4>
-<textarea id="heroGearOCR" rows="6" style="width:100%"></textarea>
-
-<h4>Parsed Output</h4>
-<textarea id="heroGearParsed" rows="10" style="width:100%"></textarea>
     </div>
   </div>
+</div>
+
+<div class="card">
+  <b>Upload Hero Gear Screenshot</b><br><br>
+
+  <input type="file" id="heroGearFile" accept="image/*"><br><br>
+  <button onclick="readHeroGear()">Read Gear</button>
+  <div id="heroGearStatus" class="status"></div>
+
+  <h3>Hero Gear OCR Output</h3>
+  <textarea id="heroGearOCR"></textarea>
+
+  <h3>Hero Gear Parsed Output</h3>
+  <textarea id="heroGearParsed"></textarea>
 </div>
 
 
