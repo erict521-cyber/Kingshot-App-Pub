@@ -84,6 +84,21 @@
 
   <button onclick="saveHeroStats()">Save Hero Stats to Player</button>
 </div>
+<div class="card">
+  <b>Upload Hero Skills Screenshot</b><br><br>
+
+  <input type="file" id="heroSkillsFile" accept="image/*"><br><br>
+  <button onclick="readHeroSkills()">Read Hero Skills</button>
+  <div id="heroSkillsStatus" class="status"></div>
+
+  <h3>Hero Skills OCR Output</h3>
+  <textarea id="heroSkillsOCR"></textarea>
+
+  <h3>Hero Skills Parsed Output</h3>
+  <textarea id="heroSkillsParsed"></textarea>
+
+  <button onclick="saveHeroSkills()">Save Hero Skills</button>
+</div>
 
 <script>
 const DB_KEY = "kingshot_player_troops_capture_v1_db";
@@ -129,6 +144,18 @@ function normalizeHeroName(name) {
   return String(name || "")
     .toLowerCase()
     .replace(/[^a-z0-9]/g, "");
+}
+
+function getSkillSlotRegions() {
+  return {
+    slot_1: [0.05, 0.20, 0.25, 0.40], // top-left
+    slot_2: [0.05, 0.40, 0.25, 0.60], // mid-left
+    slot_3: [0.05, 0.60, 0.25, 0.80], // bottom-left
+
+    slot_4: [0.75, 0.20, 0.95, 0.40], // top-right
+    slot_5: [0.75, 0.40, 0.95, 0.60], // mid-right
+    slot_6: [0.75, 0.60, 0.95, 0.80]  // bottom-right
+  };
 }
 
 async function readHero() {
@@ -281,6 +308,45 @@ async function readHeroStats() {
   }
 }
 
+async function readHeroSkills() {
+  const file = document.getElementById("heroSkillsFile").files[0];
+  if (!file) return;
+
+  const img = await loadImage(file);
+
+  const regions = getSkillSlotRegions();
+  let ocrDump = "";
+  let results = {};
+
+  for (const [slot, coords] of Object.entries(regions)) {
+    const crop = cropCanvas(img, ...coords);
+
+    const text = await ocrCanvas(
+      crop,
+      "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789."
+    );
+
+    ocrDump += `\n--- ${slot} ---\n${text}\n`;
+
+    const levelMatch = text.match(/Lv\.?\s*(\d+)/i);
+
+    if (levelMatch) {
+      results[slot] = {
+        level: parseInt(levelMatch[1]),
+        locked: false
+      };
+    } else {
+      results[slot] = {
+        level: null,
+        locked: true
+      };
+    }
+  }
+
+  document.getElementById("heroSkillsOCR").value = ocrDump;
+  document.getElementById("heroSkillsParsed").value =
+    JSON.stringify(results, null, 2);
+}
 function parseHeroOverviewParts(parts) {
   const {
     nameText = "",
@@ -693,6 +759,43 @@ function saveHeroStats() {
   alert("Hero stats saved to player " + playerId);
   document.getElementById("heroStatsStatus").textContent = "Hero stats saved.";
 }
+
+function saveHeroSkills() {
+  const parsed = JSON.parse(
+    document.getElementById("heroSkillsParsed").value
+  );
+
+  const heroName = currentHero?.hero_name;
+  if (!heroName) {
+    alert("No hero selected");
+    return;
+  }
+
+  const heroKey = heroName.toLowerCase();
+
+  const library = HERO_LIBRARY[heroKey];
+  if (!library) {
+    alert("Hero not found in library");
+    return;
+  }
+
+  const mappedSkills = {};
+
+  for (const [slot, data] of Object.entries(parsed)) {
+    const skillMeta = library.skills[slot];
+    if (!skillMeta) continue;
+
+    mappedSkills[skillMeta.name] = {
+      level: data.level,
+      locked: data.locked
+    };
+  }
+
+  currentHero.skills = mappedSkills;
+
+  alert("Hero skills saved");
+}
+
 </script>
 </body>
 </html>
