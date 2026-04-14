@@ -233,15 +233,15 @@ async function readHeroStats() {
     const img = await loadImageFromFile(file);
 
     // Crop top identity area: hero name + rarity
-    const heroTopCanvas = cropCanvas(img, 0.00, 0.00, 1.00, 0.16);
+    const heroTopCanvas = cropCanvas(img, 0.22, 0.00, 0.56, 0.12);
 
     // Crop popup stats box
     const statsPanelCanvas = cropCanvas(img, 0.28, 0.40, 0.62, 0.47);
 
     const heroTopText = await ocrCanvas(
-      heroTopCanvas,
-      "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz "
-    );
+  heroTopCanvas,
+  "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
+);
 
     const statsPanelText = await ocrCanvas(
       statsPanelCanvas,
@@ -424,6 +424,12 @@ function parseHeroStatsParts(parts) {
   } = parts || {};
 
   const topRaw = String(heroTopText || "");
+const topLines = topRaw
+  .split(/\n+/)
+  .map(s => s.trim())
+  .filter(Boolean)
+  .map(s => s.replace(/[^A-Za-z]/g, "").trim())
+  .filter(Boolean);
   const statsRaw = String(statsPanelText || "");
   const fullRaw = String(fullText || "");
 
@@ -490,22 +496,19 @@ function parseHeroStatsParts(parts) {
 
 let matchedMeta = null;
 
-// First: try line-by-line matching against hero library
-for (const line of fullLines) {
-  const cleanedLine = line.replace(/[^A-Za-z ]/g, " ").replace(/\s+/g, " ").trim();
-  const normLine = normalizeHeroName(cleanedLine);
-
+// First try top crop lines
+for (const line of topLines) {
+  const normLine = normalizeHeroName(line);
   for (const [key, meta] of Object.entries(HERO_LIBRARY)) {
     if (normLine === key || normLine.includes(key)) {
       matchedMeta = meta;
       break;
     }
   }
-
   if (matchedMeta) break;
 }
 
-// Fallback: search the entire OCR blob
+// Fallback to full OCR if needed
 if (!matchedMeta) {
   const fullNorm = normalizeHeroName(fullRaw);
   for (const [key, meta] of Object.entries(HERO_LIBRARY)) {
@@ -521,6 +524,7 @@ if (matchedMeta) {
   rec.troop_type = matchedMeta.troop_type;
   rec.rarity = matchedMeta.rarity;
 }
+
 
   // rarity fallback from top crop or full OCR
   if (!rec.rarity) {
