@@ -186,6 +186,16 @@ const GEAR_SLOT_TYPES = {
   center_exclusive: "exclusive"
 };
 
+const HERO_EXCLUSIVE_EXISTS = {
+  jabel: true,
+  saul: true,
+  zoe: true,
+  helga: true,
+  forrest: true,
+  amane: true,
+  fahd: false
+};
+
 function setStatus(msg = "") {
   document.getElementById("heroStatus").textContent = msg;
 }
@@ -722,50 +732,36 @@ async function readHeroGear() {
   if (refine !== null && refine > 100) refine = refine % 100;
   if (refine === 0) refine = 100;
 
-  // --- STATE DETECTION ---
+  const heroKey = parsedHeroKeyFromTop(heroTopText);
+  const exclusiveExists = heroKey ? !!HERO_EXCLUSIVE_EXISTS[heroKey] : true;
 
-  // 1. EXISTS check (is there any meaningful visual data?)
-  const ctx = crop.getContext("2d");
-  const imgData = ctx.getImageData(0, 0, crop.width, crop.height).data;
+  let exists = exclusiveExists;
+  let equipped = false;
+  let locked = false;
 
-  let variance = 0;
-  for (let i = 0; i < imgData.length; i += 4) {
-    variance += Math.abs(imgData[i] - imgData[i + 1]);
+  if (!exists) {
+    equipped = false;
+    locked = false;
+    refine = null;
+  } else if (refine !== null) {
+    equipped = true;
+    locked = false;
+  } else {
+    equipped = false;
+    locked = true;
   }
-  const normalizedVariance = variance / (imgData.length / 4);
-  const exists = normalizedVariance > 10;
-
-  // 2. LOCK detection (bright center cluster)
-  const lockCrop = cropCanvas(crop, 0.25, 0.25, 0.5, 0.5);
-  const lockZoom = upscaleCanvas(lockCrop, 3);
-
-  const lockCtx = lockZoom.getContext("2d");
-  const lockData = lockCtx.getImageData(0, 0, lockZoom.width, lockZoom.height).data;
-
-  let brightPixels = 0;
-  for (let i = 0; i < lockData.length; i += 4) {
-    const avg = (lockData[i] + lockData[i + 1] + lockData[i + 2]) / 3;
-    if (avg > 220) brightPixels++;
-  }
-
-  const lockRatio = brightPixels / (lockData.length / 4);
-  const locked = lockRatio > 0.18;
-
-  // 3. EQUIPPED (if we successfully read refine)
-  const equipped = refine !== null;
 
   results[slot] = {
     slot_type: GEAR_SLOT_TYPES[slot],
-    exists: exists,
-    locked: locked,
-    equipped: equipped,
+    exists,
+    locked,
+    equipped,
     rarity: exists ? "mythic" : null,
-    refine: refine
+    refine
   };
 
-  ocrDump += `\n--- ${slot} ---\nrefineOCR: ${refineClean}\nexists: ${exists}\nlocked: ${locked}\nequipped: ${equipped}\nvariance: ${normalizedVariance.toFixed(2)}\nlockRatio: ${lockRatio.toFixed(3)}\n`;
+  ocrDump += `\n--- ${slot} ---\nrefineOCR: ${refineClean}\nexists: ${exists}\nlocked: ${locked}\nequipped: ${equipped}\n`;
 }
-
          else {
   const refineCrop = cropCanvas(crop, 0.51, 0.03, 0.44, 0.24);
   const levelCrop = cropCanvas(crop, 0.51, 0.72, 0.44, 0.24);
@@ -1288,6 +1284,14 @@ function saveHeroSkills() {
 
   alert("Hero skills saved");
   document.getElementById("heroSkillsStatus").textContent = "Hero skills saved.";
+}
+
+function parsedHeroKeyFromTop(heroTopText) {
+  const topNorm = normalizeHeroName(heroTopText);
+  for (const key of Object.keys(HERO_LIBRARY)) {
+    if (topNorm.includes(key)) return key;
+  }
+  return null;
 }
 </script>
 </body>
