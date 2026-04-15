@@ -776,22 +776,29 @@ async function readHeroGear() {
 
   let level = null;
 
-  // FIRST: trust digit-only crop
-  const digitMatch = levelDigitClean.match(/(\d)/);
-  if (digitMatch) {
-    level = parseInt(digitMatch[1], 10);
-  } else {
-    // fallback to full badge OCR
-    const levelMatch =
-      levelClean.match(/Lv\.?\s*(\d+)/i) ||
-      levelClean.match(/L[vVy]\.?\s*(\d+)/i) ||
-      levelClean.match(/L\D*(\d+)/i) ||
-      levelClean.match(/^\D*(\d)\D*$/);
+// normalize noisy digit OCR first
+const digitOnly = levelDigitClean.replace(/[^0-9]/g, "");
 
-    if (levelMatch) {
-      level = parseInt(levelMatch[1], 10);
-    }
+// if OCR gives junk like 22, 11, etc, use the last digit
+if (digitOnly.length >= 1) {
+  level = parseInt(digitOnly[digitOnly.length - 1], 10);
+} else {
+  // fallback to full badge OCR
+  const levelMatch =
+    levelClean.match(/Lv\.?\s*(\d+)/i) ||
+    levelClean.match(/L[vVy]\.?\s*(\d+)/i) ||
+    levelClean.match(/L\D*(\d+)/i) ||
+    levelClean.match(/^\D*(\d)\D*$/);
+
+  if (levelMatch) {
+    level = parseInt(levelMatch[1], 10);
   }
+}
+
+// final sanity clamp for current gear screen
+if (level !== null && ![1, 2].includes(level)) {
+  level = null;
+}
 
   results[slot] = {
     slot_type: GEAR_SLOT_TYPES[slot],
