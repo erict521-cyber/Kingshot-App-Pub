@@ -67,40 +67,58 @@
 
     <button onclick="saveHero()">Save to Player</button>
   </div>
-</div>
 
-<div class="card">
-  <b>Upload Hero Stats Screenshot</b><br><br>
+  <div class="card">
+    <b>Upload Hero Stats Screenshot</b><br><br>
 
-  <input type="file" id="heroStatsFile" accept="image/*"><br><br>
-  <button onclick="readHeroStats()">Read Hero Stats</button>
-  <div id="heroStatsStatus" class="status"></div>
+    <input type="file" id="heroStatsFile" accept="image/*"><br><br>
+    <button onclick="readHeroStats()">Read Hero Stats</button>
+    <div id="heroStatsStatus" class="status"></div>
 
-  <h3>Hero Stats OCR Output</h3>
-  <textarea id="heroStatsOCR"></textarea>
+    <h3>Hero Stats OCR Output</h3>
+    <textarea id="heroStatsOCR"></textarea>
 
-  <h3>Hero Stats Parsed Output</h3>
-  <textarea id="heroStatsParsed"></textarea>
+    <h3>Hero Stats Parsed Output</h3>
+    <textarea id="heroStatsParsed"></textarea>
 
-  <button onclick="saveHeroStats()">Save Hero Stats to Player</button>
-</div>
-<div class="card">
-  <b>Upload Hero Skills Screenshot</b><br><br>
+    <button onclick="saveHeroStats()">Save Hero Stats to Player</button>
+  </div>
 
-  <input type="file" id="heroSkillsFile" accept="image/*"><br><br>
-  <button onclick="readHeroSkills()">Read Hero Skills</button>
-  <div id="heroSkillsStatus" class="status"></div>
+  <div class="card">
+    <b>Upload Hero Skills Screenshot</b><br><br>
 
-  <h3>Hero Skills OCR Output</h3>
-  <textarea id="heroSkillsOCR"></textarea>
+    <input type="file" id="heroSkillsFile" accept="image/*"><br><br>
+    <button onclick="readHeroSkills()">Read Hero Skills</button>
+    <div id="heroSkillsStatus" class="status"></div>
 
-  <h3>Hero Skills Parsed Output</h3>
-  <textarea id="heroSkillsParsed"></textarea>
+    <h3>Hero Skills OCR Output</h3>
+    <textarea id="heroSkillsOCR"></textarea>
 
-<h3>Hero Skills Crop Debug</h3>
-<div id="heroSkillsDebug" style="display:grid;grid-template-columns:1fr 1fr;gap:8px;"></div>
+    <h3>Hero Skills Parsed Output</h3>
+    <textarea id="heroSkillsParsed"></textarea>
 
-  <button onclick="saveHeroSkills()">Save Hero Skills</button>
+    <h3>Hero Skills Crop Debug</h3>
+    <div id="heroSkillsDebug" style="display:grid;grid-template-columns:1fr 1fr;gap:8px;"></div>
+
+    <button onclick="saveHeroSkills()">Save Hero Skills</button>
+  </div>
+
+  <div class="card">
+    <b>Upload Hero Gear Screenshot</b><br><br>
+
+    <input type="file" id="heroGearFile" accept="image/*"><br><br>
+    <button onclick="readHeroGear()">Read Gear</button>
+    <div id="heroGearStatus" class="status"></div>
+
+    <h3>Hero Gear OCR Output</h3>
+    <textarea id="heroGearOCR"></textarea>
+
+    <h3>Hero Gear Parsed Output</h3>
+    <textarea id="heroGearParsed"></textarea>
+
+    <h3>Hero Gear Crop Debug</h3>
+    <div id="heroGearDebug" style="display:grid;grid-template-columns:1fr 1fr;gap:8px;"></div>
+  </div>
 </div>
 
 <div id="skillsReviewModal" style="
@@ -133,33 +151,23 @@
   </div>
 </div>
 
-<div class="card">
-  <b>Upload Hero Gear Screenshot</b><br><br>
-
-  <input type="file" id="heroGearFile" accept="image/*"><br><br>
-  <button onclick="readHeroGear()">Read Gear</button>
-  <div id="heroGearStatus" class="status"></div>
-
-  <h3>Hero Gear OCR Output</h3>
-  <textarea id="heroGearOCR"></textarea>
-
-  <h3>Hero Gear Parsed Output</h3>
-  <textarea id="heroGearParsed"></textarea>
-</div>
-
-
 <script>
 const DB_KEY = "kingshot_player_troops_capture_v1_db";
 let currentHero = null;
 let currentHeroOverview = null;
 let currentHeroStats = null;
 let currentHeroSkillsParsed = null;
+let currentHeroGearParsed = null;
 let pendingSkillsReview = null;
 
 const HERO_LIBRARY = {
   jabel: { canonical_name: "Jabel", troop_type: "cavalry", rarity: "SSR" },
   saul: { canonical_name: "Saul", troop_type: "archers", rarity: "SSR" },
-  zoe: { canonical_name: "Zoe", troop_type: "infantry", rarity: "SSR" }
+  zoe: { canonical_name: "Zoe", troop_type: "infantry", rarity: "SSR" },
+  helga: { canonical_name: "Helga", troop_type: "cavalry", rarity: "SSR" },
+  forrest: { canonical_name: "Forrest", troop_type: "infantry", rarity: "SSR" },
+  amane: { canonical_name: "Amane", troop_type: "archers", rarity: "SSR" },
+  fahd: { canonical_name: "Fahd", troop_type: "cavalry", rarity: "SSR" }
 };
 
 const GEAR_SLOT_REGIONS = {
@@ -217,7 +225,6 @@ function getSkillSlotRegions() {
     slot_1: [0.12, 0.26, 0.23, 0.323],
     slot_2: [0.056, 0.362, 0.168, 0.423],
     slot_3: [0.12, 0.47, 0.23, 0.536],
-
     slot_4: [0.77, 0.26, 0.88, 0.323],
     slot_5: [0.832, 0.362, 0.944, 0.423],
     slot_6: [0.765, 0.474, 0.875, 0.535]
@@ -249,8 +256,10 @@ function canvasToDataUrl(canvas) {
   return canvas.toDataURL("image/png");
 }
 
-function renderSkillDebug(debugItems) {
-  const container = document.getElementById("heroSkillsDebug");
+function renderDebugGrid(containerId, debugItems) {
+  const container = document.getElementById(containerId);
+  if (!container) return;
+
   container.innerHTML = "";
 
   debugItems.forEach(item => {
@@ -275,6 +284,10 @@ function renderSkillDebug(debugItems) {
     wrap.appendChild(img);
     container.appendChild(wrap);
   });
+}
+
+function renderSkillDebug(debugItems) {
+  renderDebugGrid("heroSkillsDebug", debugItems);
 }
 
 function thresholdCanvas(sourceCanvas, threshold = 165) {
@@ -382,8 +395,8 @@ async function readHero() {
 
     currentHero = currentHeroOverview;
 
-document.getElementById("heroParsed").value =
-  JSON.stringify(currentHeroOverview, null, 2);
+    document.getElementById("heroParsed").value =
+      JSON.stringify(currentHeroOverview, null, 2);
 
     setStatus("Hero parsed.");
   } catch (err) {
@@ -404,16 +417,13 @@ async function readHeroStats() {
   try {
     const img = await loadImageFromFile(file);
 
-    // Crop top identity area: hero name + rarity
     const heroTopCanvas = cropCanvas(img, 0.22, 0.00, 0.56, 0.12);
-
-    // Crop popup stats box
     const statsPanelCanvas = cropCanvas(img, 0.28, 0.40, 0.62, 0.47);
 
     const heroTopText = await ocrCanvas(
-  heroTopCanvas,
-  "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
-);
+      heroTopCanvas,
+      "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
+    );
 
     const statsPanelText = await ocrCanvas(
       statsPanelCanvas,
@@ -481,53 +491,49 @@ async function readHeroSkills() {
     for (const [slot, coords] of Object.entries(regions)) {
       const iconCrop = cropCanvasRect(img, ...coords);
 
-// --- LOCK DETECTION (add this block) ---
-const lockCrop = cropCanvas(iconCrop, 0.22, 0.18, 0.56, 0.46);
-const lockZoom = upscaleCanvas(lockCrop, 3);
+      const lockCrop = cropCanvas(iconCrop, 0.22, 0.18, 0.56, 0.46);
+      const lockZoom = upscaleCanvas(lockCrop, 3);
 
-// optional OCR (not required but useful for debugging)
-const lockText = await ocrCanvas(
-  lockZoom,
-  "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
-);
+      const lockText = await ocrCanvas(
+        lockZoom,
+        "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
+      );
 
-// brightness-based detection (this is the real signal)
-const lockCtx = lockZoom.getContext("2d");
-const lockData = lockCtx.getImageData(0, 0, lockZoom.width, lockZoom.height).data;
+      const lockCtx = lockZoom.getContext("2d");
+      const lockData = lockCtx.getImageData(0, 0, lockZoom.width, lockZoom.height).data;
 
-let brightPixels = 0;
-for (let i = 0; i < lockData.length; i += 4) {
-  const avg = (lockData[i] + lockData[i + 1] + lockData[i + 2]) / 3;
-  if (avg > 220) brightPixels++;
-}
+      let brightPixels = 0;
+      for (let i = 0; i < lockData.length; i += 4) {
+        const avg = (lockData[i] + lockData[i + 1] + lockData[i + 2]) / 3;
+        if (avg > 220) brightPixels++;
+      }
 
-const lockRatio = brightPixels / (lockData.length / 4);
-const isLocked = lockRatio > 0.21;
+      const lockRatio = brightPixels / (lockData.length / 4);
+      const isLocked = lockRatio > 0.21;
 
-      // Badge area inside the icon crop
       const badgeCrop = cropCanvas(iconCrop, 0.18, 0.68, 0.64, 0.24);
       const badgeZoom = upscaleCanvas(badgeCrop, 5);
 
       debugItems.push({ label: `${slot} icon`, canvas: iconCrop });
-debugItems.push({ label: `${slot} lock`, canvas: lockZoom });
-debugItems.push({ label: `${slot} badge`, canvas: badgeZoom });
+      debugItems.push({ label: `${slot} lock`, canvas: lockZoom });
+      debugItems.push({ label: `${slot} badge`, canvas: badgeZoom });
 
       const text = await ocrCanvas(
-  badgeZoom,
-  "Lv.0123456789"
+        badgeZoom,
+        "Lv.0123456789"
       );
 
       const cleaned = text.replace(/\s+/g, " ").trim();
 
-const levelMatch =
-  cleaned.match(/Lv\.?\s*(\d)/i) ||
-  cleaned.match(/L[vVy]\.?\s*(\d)/i) ||
-  cleaned.match(/^\D*(\d)\D*$/);
+      const levelMatch =
+        cleaned.match(/Lv\.?\s*(\d)/i) ||
+        cleaned.match(/L[vVy]\.?\s*(\d)/i) ||
+        cleaned.match(/^\D*(\d)\D*$/);
 
-results[slot] = {
-  level: levelMatch ? parseInt(levelMatch[1], 10) : null,
-  locked: isLocked
-};
+      results[slot] = {
+        level: levelMatch ? parseInt(levelMatch[1], 10) : null,
+        locked: isLocked
+      };
 
       ocrDump += `\n--- ${slot} ---\nlevelOCR: ${cleaned}\nlockOCR: ${lockText}\nlockRatio: ${lockRatio.toFixed(3)}\nlocked: ${isLocked}\n`;
     }
@@ -550,15 +556,15 @@ results[slot] = {
     }
 
     document.getElementById("heroSkillsOCR").value = ocrDump;
-document.getElementById("heroSkillsParsed").value =
-  JSON.stringify(parsed, null, 2);
+    document.getElementById("heroSkillsParsed").value =
+      JSON.stringify(parsed, null, 2);
 
-currentHeroSkillsParsed = parsed;
+    currentHeroSkillsParsed = parsed;
 
-renderSkillDebug(debugItems);
-openSkillsReview(parsed);
+    renderSkillDebug(debugItems);
+    openSkillsReview(parsed);
 
-document.getElementById("heroSkillsStatus").textContent = "Hero skills parsed. Review before saving.";
+    document.getElementById("heroSkillsStatus").textContent = "Hero skills parsed. Review before saving.";
   } catch (err) {
     console.error(err);
     document.getElementById("heroSkillsStatus").textContent =
@@ -678,35 +684,38 @@ async function readHeroGear() {
   try {
     const img = await loadImageFromFile(file);
 
-    const regions = GEAR_SLOT_REGIONS;
+    const heroTopCanvas = cropCanvasRect(img, 0.22, 0.00, 0.78, 0.12);
+    const heroTopZoom = upscaleCanvas(heroTopCanvas, 3);
+    const heroTopText = await ocrCanvas(
+      heroTopZoom,
+      "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
+    );
+
     const results = {};
     const debugItems = [];
+    let ocrDump = `--- HERO TOP OCR ---\n${heroTopText}\n`;
 
-    let ocrDump = "";
-
-    for (const [slot, coords] of Object.entries(regions)) {
+    for (const [slot, coords] of Object.entries(GEAR_SLOT_REGIONS)) {
       const crop = cropCanvasRect(img, ...coords);
       const zoom = upscaleCanvas(crop, 3);
 
-      debugItems.push({ label: `${slot}`, canvas: zoom });
+      debugItems.push({ label: slot, canvas: zoom });
 
-      // OCR for level + refine
       const text = await ocrCanvas(
         zoom,
-        "Lv.+0123456789"
+        "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzLv.+0123456789"
       );
 
-      const cleaned = text.replace(/\s+/g, " ").trim();
-
+      const cleaned = String(text || "").replace(/\s+/g, " ").trim();
       const levelMatch = cleaned.match(/Lv\.?\s*(\d+)/i);
       const refineMatch = cleaned.match(/\+(\d+)/);
 
       results[slot] = {
         slot_type: GEAR_SLOT_TYPES[slot],
-        exists: true, // will refine later for exclusive
-        locked: false, // placeholder for now
-        equipped: true, // placeholder
-        rarity: null, // we’ll detect via color later
+        exists: true,
+        locked: false,
+        equipped: true,
+        rarity: null,
         level: levelMatch ? parseInt(levelMatch[1], 10) : null,
         refine: refineMatch ? parseInt(refineMatch[1], 10) : null
       };
@@ -716,14 +725,28 @@ async function readHeroGear() {
 
     const parsed = {
       hero_name: null,
+      troop_type: null,
+      rarity: null,
       gear_slots: results
     };
+
+    const topNorm = normalizeHeroName(heroTopText);
+    for (const [key, meta] of Object.entries(HERO_LIBRARY)) {
+      if (topNorm.includes(key)) {
+        parsed.hero_name = meta.canonical_name;
+        parsed.troop_type = meta.troop_type;
+        parsed.rarity = meta.rarity;
+        break;
+      }
+    }
+
+    currentHeroGearParsed = parsed;
 
     document.getElementById("heroGearOCR").value = ocrDump;
     document.getElementById("heroGearParsed").value =
       JSON.stringify(parsed, null, 2);
 
-    renderSkillDebug(debugItems); // reuse existing debug renderer
+    renderDebugGrid("heroGearDebug", debugItems);
 
     document.getElementById("heroGearStatus").textContent = "Hero gear parsed.";
   } catch (err) {
@@ -795,7 +818,6 @@ function parseHeroOverviewParts(parts) {
     else if (/\bR\b/i.test(rarityRaw)) rec.rarity = "R";
   }
 
-  // hero power: first big comma number in full OCR
   const powerMatch =
     String(fullText || "").match(/\b\d{1,3}(?:,\d{3})+\b/) ||
     String(powerText || "").match(/\b\d{1,3}(?:,\d{3})+\b/);
@@ -804,8 +826,6 @@ function parseHeroOverviewParts(parts) {
     rec.hero_power = cleanInt(powerMatch[0]);
   }
 
-  // escorts + troop capacity:
-  // parse from the full OCR block after "Escorts Level Troops Capacity"
   const fullLines = String(fullText || "")
     .split(/\n+/)
     .map(s => s.trim())
@@ -821,7 +841,6 @@ function parseHeroOverviewParts(parts) {
       .map(cleanInt)
       .filter(n => n > 0);
 
-    // likely row = [10, 13,190] with level OCR failing in the middle
     const smallNums = nums.filter(n => n < 1000);
     const capNums = nums.filter(n => n >= 1000 && n < 100000);
 
@@ -829,11 +848,10 @@ function parseHeroOverviewParts(parts) {
     if (capNums.length) rec.troop_capacity = capNums[capNums.length - 1];
   }
 
-  // fallback from summary crop only if still missing
   if (!rec.escort_count || !rec.troop_capacity) {
     const summaryNums = (String(summaryRowText || "").match(/\d[\d,]*/g) || [])
       .map(cleanInt)
-      .filter(n => n > 0 && n < 100000); // ignore huge hero power junk
+      .filter(n => n > 0 && n < 100000);
 
     const smallNums = summaryNums.filter(n => n < 1000);
     const capNums = summaryNums.filter(n => n >= 1000);
@@ -842,22 +860,17 @@ function parseHeroOverviewParts(parts) {
     if (!rec.troop_capacity && capNums.length) rec.troop_capacity = capNums[capNums.length - 1];
   }
 
-  // level: only trust if it looks realistic and not equal to escort count
   const levelNums = (String(levelText || "").match(/\d+/g) || [])
-  .map(v => parseInt(v, 10))
-  .filter(v => !isNaN(v) && v >= 1 && v <= 100);
+    .map(v => parseInt(v, 10))
+    .filter(v => !isNaN(v) && v >= 1 && v <= 100);
 
-// For now, reject suspicious low levels from this screen.
-// Your tested heroes are not level 1, and this crop is still noisy.
-if (levelNums.length) {
-  const candidate = levelNums[0];
-  if (candidate >= 10 && candidate !== rec.escort_count) {
-    rec.level = candidate;
+  if (levelNums.length) {
+    const candidate = levelNums[0];
+    if (candidate >= 10 && candidate !== rec.escort_count) {
+      rec.level = candidate;
+    }
   }
-}
 
-
-  // if level crop fails, leave null for now rather than poisoning data
   if (!rec.hero_name) rec.review_flags.push("Missing hero_name");
   if (!rec.level) rec.review_flags.push("Missing level");
   if (!rec.hero_power) rec.review_flags.push("Missing hero_power");
@@ -877,16 +890,15 @@ function parseHeroStatsParts(parts) {
   } = parts || {};
 
   const topRaw = String(heroTopText || "");
-const topLines = topRaw
-  .split(/\n+/)
-  .map(s => s.trim())
-  .filter(Boolean)
-  .map(s => s.replace(/[^A-Za-z]/g, "").trim())
-  .filter(Boolean);
-  const statsRaw = String(statsPanelText || "");
+  const topLines = topRaw
+    .split(/\n+/)
+    .map(s => s.trim())
+    .filter(Boolean)
+    .map(s => s.replace(/[^A-Za-z]/g, "").trim())
+    .filter(Boolean);
+
   const fullRaw = String(fullText || "");
 
-  // Use FULL OCR for real parsing because it preserves the digits better
   const parseLines = fullRaw
     .split(/\n+/)
     .map(s => s.trim())
@@ -898,7 +910,6 @@ const topLines = topRaw
     hero_name: null,
     troop_type: null,
     rarity: null,
-
     conquest: {
       hero_attack: null,
       hero_defense: null,
@@ -907,14 +918,12 @@ const topLines = topRaw
       escort_defense: null,
       escort_health: null
     },
-
     expedition: {
       attack: null,
       defense: null,
       lethality: null,
       health: null
     },
-
     captured_at: nowIso(),
     confidence: { overall: 0.95 },
     review_flags: []
@@ -927,7 +936,6 @@ const topLines = topRaw
   }
 
   function extractLastPercent(line) {
-    // allow OCR to use ¢ instead of %
     const cleaned = line.replace(/¢/g, "%");
     const matches = cleaned.match(/[+\-]?[\d.]+(?=\s*[%])/g) || [];
     if (!matches.length) return null;
@@ -941,45 +949,35 @@ const topLines = topRaw
     return null;
   }
 
-  // -------- hero identity from FULL OCR first --------
-  const fullLines = fullRaw
-  .split(/\n+/)
-  .map(s => s.trim())
-  .filter(Boolean);
+  let matchedMeta = null;
 
-let matchedMeta = null;
+  for (const line of topLines) {
+    const normLine = normalizeHeroName(line);
+    for (const [key, meta] of Object.entries(HERO_LIBRARY)) {
+      if (normLine === key || normLine.includes(key)) {
+        matchedMeta = meta;
+        break;
+      }
+    }
+    if (matchedMeta) break;
+  }
 
-// First try top crop lines
-for (const line of topLines) {
-  const normLine = normalizeHeroName(line);
-  for (const [key, meta] of Object.entries(HERO_LIBRARY)) {
-    if (normLine === key || normLine.includes(key)) {
-      matchedMeta = meta;
-      break;
+  if (!matchedMeta) {
+    const fullNorm = normalizeHeroName(fullRaw);
+    for (const [key, meta] of Object.entries(HERO_LIBRARY)) {
+      if (fullNorm.includes(key)) {
+        matchedMeta = meta;
+        break;
+      }
     }
   }
-  if (matchedMeta) break;
-}
 
-// Fallback to full OCR if needed
-if (!matchedMeta) {
-  const fullNorm = normalizeHeroName(fullRaw);
-  for (const [key, meta] of Object.entries(HERO_LIBRARY)) {
-    if (fullNorm.includes(key)) {
-      matchedMeta = meta;
-      break;
-    }
+  if (matchedMeta) {
+    rec.hero_name = matchedMeta.canonical_name;
+    rec.troop_type = matchedMeta.troop_type;
+    rec.rarity = matchedMeta.rarity;
   }
-}
 
-if (matchedMeta) {
-  rec.hero_name = matchedMeta.canonical_name;
-  rec.troop_type = matchedMeta.troop_type;
-  rec.rarity = matchedMeta.rarity;
-}
-
-
-  // rarity fallback from top crop or full OCR
   if (!rec.rarity) {
     const rarityRaw = `${topRaw} ${fullRaw}`;
     if (/SSR/i.test(rarityRaw)) rec.rarity = "SSR";
@@ -987,7 +985,6 @@ if (matchedMeta) {
     else if (/\bR\b/i.test(rarityRaw)) rec.rarity = "R";
   }
 
-  // -------- conquest --------
   const conquestMap = [
     ["Hero Attack", "hero_attack"],
     ["Hero Defense", "hero_defense"],
@@ -1002,39 +999,32 @@ if (matchedMeta) {
     if (line) rec.conquest[key] = extractLastNumber(line);
   }
 
-  // -------- expedition --------
   if (rec.troop_type === "cavalry" || /Cavalry Attack/i.test(fullRaw)) {
     if (!rec.troop_type) rec.troop_type = "cavalry";
-
     const atk = findLine("Cavalry Attack");
     const def = findLine("Cavalry Defense");
     const leth = findLine("Cavalry Lethality");
     const hp = findLine("Cavalry Health");
-
     if (atk) rec.expedition.attack = extractLastPercent(atk);
     if (def) rec.expedition.defense = extractLastPercent(def);
     if (leth) rec.expedition.lethality = extractLastPercent(leth);
     if (hp) rec.expedition.health = extractLastPercent(hp);
   } else if (rec.troop_type === "infantry" || /Infantry Attack/i.test(fullRaw)) {
     if (!rec.troop_type) rec.troop_type = "infantry";
-
     const atk = findLine("Infantry Attack");
     const def = findLine("Infantry Defense");
     const leth = findLine("Infantry Lethality");
     const hp = findLine("Infantry Health");
-
     if (atk) rec.expedition.attack = extractLastPercent(atk);
     if (def) rec.expedition.defense = extractLastPercent(def);
     if (leth) rec.expedition.lethality = extractLastPercent(leth);
     if (hp) rec.expedition.health = extractLastPercent(hp);
   } else if (rec.troop_type === "archers" || /Archer Attack/i.test(fullRaw)) {
     if (!rec.troop_type) rec.troop_type = "archers";
-
     const atk = findLine("Archer Attack");
     const def = findLine("Archer Defense");
     const leth = findLine("Archer Lethality");
     const hp = findLine("Archer Health");
-
     if (atk) rec.expedition.attack = extractLastPercent(atk);
     if (def) rec.expedition.defense = extractLastPercent(def);
     if (leth) rec.expedition.lethality = extractLastPercent(leth);
@@ -1050,66 +1040,6 @@ if (matchedMeta) {
   if (rec.review_flags.length) {
     rec.confidence.overall = 0.82;
   }
-
-  return rec;
-}
-
-function parseHeroSkillsColumns(parts) {
-  const {
-    heroTopText = "",
-    leftText = "",
-    rightText = "",
-    fullText = ""
-  } = parts || {};
-
-  const rec = {
-    hero_name: null,
-    troop_type: null,
-    rarity: null,
-    slots: {
-      slot_1: { level: null, locked: null },
-      slot_2: { level: null, locked: null },
-      slot_3: { level: null, locked: null },
-      slot_4: { level: null, locked: null },
-      slot_5: { level: null, locked: null },
-      slot_6: { level: null, locked: null }
-    }
-  };
-
-  // hero identity from top crop or full OCR
-  const topNorm = normalizeHeroName(heroTopText);
-  const fullNorm = normalizeHeroName(fullText);
-
-  for (const [key, meta] of Object.entries(HERO_LIBRARY)) {
-    if (topNorm.includes(key) || fullNorm.includes(key)) {
-      rec.hero_name = meta.canonical_name;
-      rec.troop_type = meta.troop_type;
-      rec.rarity = meta.rarity;
-      break;
-    }
-  }
-
-  function extractOrderedLevels(text) {
-    const cleaned = String(text || "").replace(/\s+/g, " ");
-    const matches = [...cleaned.matchAll(/Lv\.?\s*(\d)/gi)].map(m => parseInt(m[1], 10));
-
-    // fallback if OCR missed "Lv." but still saw isolated digits near badges
-    if (matches.length) return matches;
-
-    return [];
-  }
-
-  const leftLevels = extractOrderedLevels(leftText);
-  const rightLevels = extractOrderedLevels(rightText);
-
-  // order is top -> middle -> bottom
-  rec.slots.slot_1.level = leftLevels[0] ?? null;
-  rec.slots.slot_2.level = leftLevels[1] ?? null;
-  rec.slots.slot_3.level = leftLevels[2] ?? null;
-
-  rec.slots.slot_4.level = rightLevels[0] ?? null;
-  rec.slots.slot_5.level = rightLevels[1] ?? null;
-  rec.slots.slot_6.level = rightLevels[2] ?? null;
 
   return rec;
 }
@@ -1218,33 +1148,12 @@ function saveHeroSkills() {
     return;
   }
 
-  const heroKey = heroName.toLowerCase();
-  const library = HERO_LIBRARY[heroKey];
-  if (!library) {
-    alert("Hero not found in library");
-    return;
-  }
-
-  const mappedSkills = {};
-
-  for (const [slot, data] of Object.entries(parsed.slots || {})) {
-    const skillMeta = library.skills?.[slot];
-    if (!skillMeta) continue;
-
-    mappedSkills[skillMeta.name] = {
-      slot,
-      level: data.level,
-      locked: data.locked
-    };
-  }
-
   currentHero = currentHero || {};
-  currentHero.skills = mappedSkills;
+  currentHero.skills = parsed.slots || {};
 
   alert("Hero skills saved");
   document.getElementById("heroSkillsStatus").textContent = "Hero skills saved.";
 }
-
 </script>
 </body>
 </html>
