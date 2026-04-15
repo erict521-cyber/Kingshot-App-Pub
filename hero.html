@@ -729,8 +729,8 @@ async function readHeroGear() {
         ocrDump += `\n--- ${slot} ---\nrefineOCR: ${refineClean}\n`;
       } else {
         // outer gear pieces
-        const refineCrop = cropCanvas(crop, 0.56, 0.00, 0.44, 0.24);
-        const levelCrop = cropCanvas(crop, 0.56, 0.72, 0.44, 0.24);
+        const refineCrop = cropCanvas(crop, 0.51, 0.03, 0.44, 0.24);
+        const levelCrop = cropCanvas(crop, 0.51, 0.72, 0.44, 0.24);
 
         const refineZoom = upscaleCanvas(refineCrop, 6);
         const levelZoom = upscaleCanvas(levelCrop, 6);
