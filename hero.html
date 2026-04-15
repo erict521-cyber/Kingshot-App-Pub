@@ -746,8 +746,8 @@ async function readHeroGear() {
         );
 
         const levelText = await ocrCanvas(
-          levelZoom,
-          "Lv.0123456789"
+  levelZoom,
+  "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz.0123456789"
         );
 
         const refineClean = String(refineText || "").replace(/\s+/g, " ").trim();
