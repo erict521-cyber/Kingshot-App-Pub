@@ -733,65 +733,80 @@ async function readHeroGear() {
 
         ocrDump += `\n--- ${slot} ---\nrefineOCR: ${refineClean}\n`;
       } else {
-        const refineCrop = cropCanvas(crop, 0.51, 0.03, 0.44, 0.24);
-        const levelCrop = cropCanvas(crop, 0.51, 0.72, 0.44, 0.24);
+  const refineCrop = cropCanvas(crop, 0.51, 0.03, 0.44, 0.24);
+  const levelCrop = cropCanvas(crop, 0.51, 0.72, 0.44, 0.24);
 
-        const refineZoom = upscaleCanvas(refineCrop, 6);
-        const levelZoom = upscaleCanvas(levelCrop, 6);
+  // isolate digit only (right side of level badge)
+  const levelDigitCrop = cropCanvas(levelCrop, 0.62, 0.00, 0.38, 1.00);
 
-        debugItems.push({ label: `${slot} refine`, canvas: refineZoom });
-        debugItems.push({ label: `${slot} level`, canvas: levelZoom });
+  const refineZoom = upscaleCanvas(refineCrop, 6);
+  const levelZoom = upscaleCanvas(levelCrop, 6);
+  const levelDigitZoom = upscaleCanvas(levelDigitCrop, 8);
 
-        const refineText = await ocrCanvas(
-          refineZoom,
-          "+0123456789"
-        );
+  debugItems.push({ label: `${slot} refine`, canvas: refineZoom });
+  debugItems.push({ label: `${slot} level`, canvas: levelZoom });
+  debugItems.push({ label: `${slot} level_digit`, canvas: levelDigitZoom });
 
-        const levelText = await ocrCanvas(
-          levelZoom,
-          "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz.0123456789"
-        );
+  const refineText = await ocrCanvas(
+    refineZoom,
+    "+0123456789"
+  );
 
-        const refineClean = String(refineText || "").replace(/\s+/g, " ").trim();
-        const levelClean = String(levelText || "").replace(/\s+/g, " ").trim();
+  const levelText = await ocrCanvas(
+    levelZoom,
+    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz.0123456789"
+  );
 
-        const refineMatch =
-          refineClean.match(/\+(\d+)/) ||
-          refineClean.match(/(\d{1,3})/);
+  const levelDigitText = await ocrCanvas(
+    levelDigitZoom,
+    "0123456789"
+  );
 
-        let refine = refineMatch ? parseInt(refineMatch[1], 10) : null;
-        if (refine !== null && refine > 100) refine = refine % 100;
-        if (refine === 0) refine = 100;
+  const refineClean = String(refineText || "").replace(/\s+/g, " ").trim();
+  const levelClean = String(levelText || "").replace(/\s+/g, " ").trim();
+  const levelDigitClean = String(levelDigitText || "").replace(/\s+/g, " ").trim();
 
-        let level = null;
-        const levelMatch =
-          levelClean.match(/Lv\.?\s*(\d+)/i) ||
-          levelClean.match(/L[vVy]\.?\s*(\d+)/i) ||
-          levelClean.match(/L\D*(\d+)/i) ||
-          levelClean.match(/^\D*(\d)\D*$/);
+  const refineMatch =
+    refineClean.match(/\+(\d+)/) ||
+    refineClean.match(/(\d{1,3})/);
 
-        if (levelMatch) {
-          level = parseInt(levelMatch[1], 10);
-        } else {
-          const digitsOnly = levelClean.replace(/[^\d]/g, "");
-          if (digitsOnly.length === 1) {
-            level = parseInt(digitsOnly, 10);
-          }
-        }
+  let refine = refineMatch ? parseInt(refineMatch[1], 10) : null;
+  if (refine !== null && refine > 100) refine = refine % 100;
+  if (refine === 0) refine = 100;
 
-        results[slot] = {
-          slot_type: GEAR_SLOT_TYPES[slot],
-          exists: true,
-          locked: false,
-          equipped: true,
-          rarity: null,
-          level: level,
-          refine: refine
-        };
+  let level = null;
 
-        ocrDump += `\n--- ${slot} ---\nrefineOCR: ${refineClean}\nlevelOCR: ${levelClean}\n`;
-      }
+  // FIRST: trust digit-only crop
+  const digitMatch = levelDigitClean.match(/(\d)/);
+  if (digitMatch) {
+    level = parseInt(digitMatch[1], 10);
+  } else {
+    // fallback to full badge OCR
+    const levelMatch =
+      levelClean.match(/Lv\.?\s*(\d+)/i) ||
+      levelClean.match(/L[vVy]\.?\s*(\d+)/i) ||
+      levelClean.match(/L\D*(\d+)/i) ||
+      levelClean.match(/^\D*(\d)\D*$/);
+
+    if (levelMatch) {
+      level = parseInt(levelMatch[1], 10);
     }
+  }
+
+  results[slot] = {
+    slot_type: GEAR_SLOT_TYPES[slot],
+    exists: true,
+    locked: false,
+    equipped: true,
+    rarity: null,
+    level: level,
+    refine: refine
+  };
+
+  ocrDump += `\n--- ${slot} ---\nrefineOCR: ${refineClean}\nlevelOCR: ${levelClean}\nlevelDigitOCR: ${levelDigitClean}\n`;
+}
+
+        
 
     const parsed = {
       hero_name: null,
