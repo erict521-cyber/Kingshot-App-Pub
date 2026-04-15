@@ -763,7 +763,7 @@ async function readHeroGear() {
     refine: refine
   };
 
-  ocrDump += `\n--- ${slot} ---\nrefineOCR: ${refineClean}\nexists: ${exists}\nlocked: ${locked}\nequipped: ${equipped}\n`;
+  ocrDump += `\n--- ${slot} ---\nrefineOCR: ${refineClean}\nexists: ${exists}\nlocked: ${locked}\nequipped: ${equipped}\nvariance: ${normalizedVariance.toFixed(2)}\nlockRatio: ${lockRatio.toFixed(3)}\n`;
 }
 
          else {
