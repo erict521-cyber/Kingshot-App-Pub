@@ -776,14 +776,12 @@ async function readHeroGear() {
 
   let level = null;
 
-// normalize noisy digit OCR first
 const digitOnly = levelDigitClean.replace(/[^0-9]/g, "");
 
-// if OCR gives junk like 22, 11, etc, use the last digit
+// first trust digit crop
 if (digitOnly.length >= 1) {
   level = parseInt(digitOnly[digitOnly.length - 1], 10);
 } else {
-  // fallback to full badge OCR
   const levelMatch =
     levelClean.match(/Lv\.?\s*(\d+)/i) ||
     levelClean.match(/L[vVy]\.?\s*(\d+)/i) ||
@@ -793,6 +791,16 @@ if (digitOnly.length >= 1) {
   if (levelMatch) {
     level = parseInt(levelMatch[1], 10);
   }
+}
+
+// fallback for common OCR misread of Lv.1
+if (level === null && /Lyl/i.test(levelClean)) {
+  level = 1;
+}
+
+// final sanity clamp
+if (level !== null && ![1, 2].includes(level)) {
+  level = null;
 }
 
 // final sanity clamp for current gear screen
