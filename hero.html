@@ -714,7 +714,9 @@ async function readHeroGear() {
         );
 
         const refineClean = String(refineText || "").replace(/\s+/g, " ").trim();
-        const refineMatch = refineClean.match(/\+(\d+)/);
+        const refineMatch =
+  refineClean.match(/\+(\d+)/) ||
+  refineClean.match(/(\d{2,3})/);
 
         results[slot] = {
           slot_type: GEAR_SLOT_TYPES[slot],
@@ -751,12 +753,15 @@ async function readHeroGear() {
         const refineClean = String(refineText || "").replace(/\s+/g, " ").trim();
         const levelClean = String(levelText || "").replace(/\s+/g, " ").trim();
 
-        const refineMatch = refineClean.match(/\+(\d+)/);
+        const refineMatch =
+  refineClean.match(/\+(\d+)/) ||
+  refineClean.match(/(\d{2,3})/);
 
         const levelMatch =
-          levelClean.match(/Lv\.?\s*(\d+)/i) ||
-          levelClean.match(/L[vVy]\.?\s*(\d+)/i) ||
-          levelClean.match(/^\D*(\d+)\D*$/);
+  levelClean.match(/Lv\.?\s*(\d+)/i) ||
+  levelClean.match(/L[vVy]\.?\s*(\d+)/i) ||
+  levelClean.match(/L\D*(\d+)/i) ||
+  levelClean.match(/^\D*(\d)\D*$/);
 
         results[slot] = {
           slot_type: GEAR_SLOT_TYPES[slot],
