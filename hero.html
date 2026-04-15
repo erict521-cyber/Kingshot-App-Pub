@@ -699,28 +699,77 @@ async function readHeroGear() {
       const crop = cropCanvasRect(img, ...coords);
       const zoom = upscaleCanvas(crop, 3);
 
-      debugItems.push({ label: slot, canvas: zoom });
+      debugItems.push({ label: `${slot} full`, canvas: zoom });
 
-      const text = await ocrCanvas(
-        zoom,
-        "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzLv.+0123456789"
-      );
+      if (slot === "center_exclusive") {
+        // exclusive gear: only visible refine on overview screen
+        const refineCrop = cropCanvas(crop, 0.72, 0.00, 0.28, 0.22);
+        const refineZoom = upscaleCanvas(refineCrop, 6);
 
-      const cleaned = String(text || "").replace(/\s+/g, " ").trim();
-      const levelMatch = cleaned.match(/Lv\.?\s*(\d+)/i);
-      const refineMatch = cleaned.match(/\+(\d+)/);
+        debugItems.push({ label: `${slot} refine`, canvas: refineZoom });
 
-      results[slot] = {
-        slot_type: GEAR_SLOT_TYPES[slot],
-        exists: true,
-        locked: false,
-        equipped: true,
-        rarity: null,
-        level: levelMatch ? parseInt(levelMatch[1], 10) : null,
-        refine: refineMatch ? parseInt(refineMatch[1], 10) : null
-      };
+        const refineText = await ocrCanvas(
+          refineZoom,
+          "+0123456789"
+        );
 
-      ocrDump += `\n--- ${slot} ---\n${cleaned}\n`;
+        const refineClean = String(refineText || "").replace(/\s+/g, " ").trim();
+        const refineMatch = refineClean.match(/\+(\d+)/);
+
+        results[slot] = {
+          slot_type: GEAR_SLOT_TYPES[slot],
+          exists: true,
+          locked: false,
+          equipped: true,
+          rarity: "mythic",
+          level: null,
+          refine: refineMatch ? parseInt(refineMatch[1], 10) : null
+        };
+
+        ocrDump += `\n--- ${slot} ---\nrefineOCR: ${refineClean}\n`;
+      } else {
+        // outer gear pieces
+        const refineCrop = cropCanvas(crop, 0.56, 0.00, 0.44, 0.24);
+        const levelCrop = cropCanvas(crop, 0.56, 0.72, 0.44, 0.24);
+
+        const refineZoom = upscaleCanvas(refineCrop, 6);
+        const levelZoom = upscaleCanvas(levelCrop, 6);
+
+        debugItems.push({ label: `${slot} refine`, canvas: refineZoom });
+        debugItems.push({ label: `${slot} level`, canvas: levelZoom });
+
+        const refineText = await ocrCanvas(
+          refineZoom,
+          "+0123456789"
+        );
+
+        const levelText = await ocrCanvas(
+          levelZoom,
+          "Lv.0123456789"
+        );
+
+        const refineClean = String(refineText || "").replace(/\s+/g, " ").trim();
+        const levelClean = String(levelText || "").replace(/\s+/g, " ").trim();
+
+        const refineMatch = refineClean.match(/\+(\d+)/);
+
+        const levelMatch =
+          levelClean.match(/Lv\.?\s*(\d+)/i) ||
+          levelClean.match(/L[vVy]\.?\s*(\d+)/i) ||
+          levelClean.match(/^\D*(\d+)\D*$/);
+
+        results[slot] = {
+          slot_type: GEAR_SLOT_TYPES[slot],
+          exists: true,
+          locked: false,
+          equipped: true,
+          rarity: null,
+          level: levelMatch ? parseInt(levelMatch[1], 10) : null,
+          refine: refineMatch ? parseInt(refineMatch[1], 10) : null
+        };
+
+        ocrDump += `\n--- ${slot} ---\nrefineOCR: ${refineClean}\nlevelOCR: ${levelClean}\n`;
+      }
     }
 
     const parsed = {
