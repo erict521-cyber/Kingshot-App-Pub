@@ -737,7 +737,7 @@ async function readHeroGear() {
   const levelCrop = cropCanvas(crop, 0.51, 0.72, 0.44, 0.24);
 
   // isolate digit only (right side of level badge)
-  const levelDigitCrop = cropCanvas(levelCrop, 0.62, 0.00, 0.38, 1.00);
+  const levelDigitCrop = cropCanvas(levelCrop, 0.74, 0.00, 0.22, 1.00);
 
   const refineZoom = upscaleCanvas(refineCrop, 6);
   const levelZoom = upscaleCanvas(levelCrop, 6);
