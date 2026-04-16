@@ -615,11 +615,12 @@ function generateRoleScores(player) {
     }
   };
 
-  summary.combat_profile = summary.combat_profile || {};
-  summary.combat_profile.strongest_troop_type = null;
-  summary.combat_profile.best_usage = [];
-  summary.combat_profile.secondary_roles = [];
-  summary.combat_profile.not_recommended_roles = [];
+  summary.combat_profile = {
+  strongest_troop_type: null,
+  best_usage: [],
+  secondary_roles: [],
+  not_recommended_roles: []
+};
 
   const troopStats = player.governor?.troop_stats || {};
   const battle = player.governor?.battle || {};
