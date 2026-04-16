@@ -115,6 +115,7 @@
 
     <h3>Hero Gear Parsed Output</h3>
     <textarea id="heroGearParsed"></textarea>
+<button onclick="saveHeroGear()">Save Hero Gear</button>
 
     <h3>Hero Gear Crop Debug</h3>
     <div id="heroGearDebug" style="display:grid;grid-template-columns:1fr 1fr;gap:8px;"></div>
@@ -1352,28 +1353,34 @@ async function ocrCanvas(canvas, whitelist = "") {
 }
 
 function saveHero() {
-  if (!currentHero) {
-    alert("No hero parsed yet");
+  if (!currentHeroOverview) {
+    alert("No hero overview parsed yet");
     return;
   }
 
   const db = getDb();
-  const playerId = prompt("Enter player ID to attach hero:");
+  const playerId = prompt("Enter player ID to attach hero overview:");
 
   if (!playerId) return;
 
-  if (!db.players[playerId]) {
-    alert("Player not found in DB");
+  const playerRecord = ensurePlayerRecord(db, playerId);
+
+  if (!currentHeroOverview.hero_name) {
+    alert("Hero name missing in parsed overview");
     return;
   }
 
-  db.players[playerId].hero = currentHero;
-  db.players[playerId].updated_at = nowIso();
+  const heroRecord = ensureHeroRecord(playerRecord, currentHeroOverview.hero_name);
+  heroRecord.overview = currentHeroOverview;
+  heroRecord.meta.updated_at = nowIso();
 
+  updatePlayerSummaryFromRecords(playerRecord);
   setDb(db);
 
-  alert("Hero saved to player " + playerId);
-  setStatus("Hero saved.");
+  currentHero = heroRecord;
+
+  alert("Hero overview saved to player " + playerId);
+  setStatus("Hero overview saved.");
 }
 
 function saveHeroStats() {
@@ -1387,15 +1394,18 @@ function saveHeroStats() {
 
   if (!playerId) return;
 
-  if (!db.players[playerId]) {
-    alert("Player not found in DB");
+  const playerRecord = ensurePlayerRecord(db, playerId);
+
+  if (!currentHeroStats.hero_name) {
+    alert("Hero name missing in parsed stats");
     return;
   }
 
-  db.players[playerId].hero_stats = db.players[playerId].hero_stats || {};
-  db.players[playerId].hero_stats[currentHeroStats.hero_name || "unknown_hero"] = currentHeroStats;
-  db.players[playerId].updated_at = nowIso();
+  const heroRecord = ensureHeroRecord(playerRecord, currentHeroStats.hero_name);
+  heroRecord.stats = currentHeroStats;
+  heroRecord.meta.updated_at = nowIso();
 
+  updatePlayerSummaryFromRecords(playerRecord);
   setDb(db);
 
   alert("Hero stats saved to player " + playerId);
@@ -1407,17 +1417,57 @@ function saveHeroSkills() {
     document.getElementById("heroSkillsParsed").value
   );
 
-  const heroName = parsed.hero_name || currentHero?.hero_name;
+  const heroName = parsed.hero_name || currentHeroOverview?.hero_name || currentHero?.overview?.hero_name;
   if (!heroName) {
     alert("No hero selected");
     return;
   }
 
-  currentHero = currentHero || {};
-  currentHero.skills = parsed.slots || {};
+  const db = getDb();
+  const playerId = prompt("Enter player ID to attach hero skills:");
 
-  alert("Hero skills saved");
+  if (!playerId) return;
+
+  const playerRecord = ensurePlayerRecord(db, playerId);
+  const heroRecord = ensureHeroRecord(playerRecord, heroName);
+
+  heroRecord.skills = parsed;
+  heroRecord.meta.updated_at = nowIso();
+
+  updatePlayerSummaryFromRecords(playerRecord);
+  setDb(db);
+
+  alert("Hero skills saved to player " + playerId);
   document.getElementById("heroSkillsStatus").textContent = "Hero skills saved.";
+}
+
+function saveHeroGear() {
+  const parsed = currentHeroGearParsed || JSON.parse(
+    document.getElementById("heroGearParsed").value
+  );
+
+  const heroName = parsed.hero_name || currentHeroOverview?.hero_name || currentHero?.overview?.hero_name;
+  if (!heroName) {
+    alert("No hero selected");
+    return;
+  }
+
+  const db = getDb();
+  const playerId = prompt("Enter player ID to attach hero gear:");
+
+  if (!playerId) return;
+
+  const playerRecord = ensurePlayerRecord(db, playerId);
+  const heroRecord = ensureHeroRecord(playerRecord, heroName);
+
+  heroRecord.gear = parsed;
+  heroRecord.meta.updated_at = nowIso();
+
+  updatePlayerSummaryFromRecords(playerRecord);
+  setDb(db);
+
+  alert("Hero gear saved to player " + playerId);
+  document.getElementById("heroGearStatus").textContent = "Hero gear saved.";
 }
 
 function parsedHeroKeyFromTop(heroTopText) {
