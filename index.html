@@ -1648,6 +1648,7 @@ async function readGovernor() {
   updatePlayerSummaryFromRecords(playerRecord);
 generatePlayerSummary(playerRecord);
 generateRoleScores(playerRecord);
+setDb(db);
 
   refreshPlayerList(record.player_id);
   refreshSavedPlayersTable();
