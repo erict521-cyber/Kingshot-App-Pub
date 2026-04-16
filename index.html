@@ -483,6 +483,102 @@ function updatePlayerSummaryFromRecords(playerRecord) {
   playerRecord.meta.updated_at = nowIso();
 }
 
+function generatePlayerSummary(player) {
+  if (!player) return;
+
+  const summary = player.summary || {};
+  summary.strengths = [];
+  summary.weaknesses = [];
+  summary.top_upgrade_recommendations = [];
+
+  const troopStats = player.governor?.troop_stats || {};
+  const troopTotals = player.troops?.troop_totals || {};
+
+  // --- 1. Strongest troop type ---
+  const troopTypes = ["infantry", "cavalry", "archers"];
+  let bestType = null;
+  let bestScore = -Infinity;
+
+  for (const type of troopTypes) {
+    const stats = troopStats[type];
+    if (!stats) continue;
+
+    const score =
+      (stats.attack || 0) +
+      (stats.defense || 0) +
+      (stats.health || 0) +
+      (stats.lethality || 0);
+
+    if (score > bestScore) {
+      bestScore = score;
+      bestType = type;
+    }
+  }
+
+  summary.combat_profile = summary.combat_profile || {};
+  summary.combat_profile.strongest_troop_type = bestType;
+
+  if (bestType) {
+    summary.strengths.push(`Strong ${bestType} stat profile`);
+  }
+
+  // --- 2. Troop distribution strength ---
+  if (troopTotals) {
+    const maxTroop = Object.entries(troopTotals)
+      .filter(([k]) => k !== "total")
+      .sort((a, b) => b[1] - a[1])[0];
+
+    if (maxTroop) {
+      summary.strengths.push(`High ${maxTroop[0]} troop count`);
+    }
+  }
+
+  // --- 3. Detect suspicious stats ---
+  const flags = player.governor?.review_flags || [];
+  flags.forEach(flag => {
+    summary.weaknesses.push(flag);
+  });
+
+  // --- 4. Hero completeness issues ---
+  const heroes = Object.values(player.heroes || {});
+  heroes.forEach(hero => {
+    if (!hero.overview?.level) {
+      summary.weaknesses.push(`${hero.overview?.hero_name || "Hero"} missing level`);
+      summary.top_upgrade_recommendations.push(`Capture ${hero.overview?.hero_name} level`);
+    }
+
+    const gear = hero.gear?.gear_slots || {};
+    for (const [slot, g] of Object.entries(gear)) {
+      if (g && g.level === null && slot !== "center_exclusive") {
+        summary.weaknesses.push(`${hero.overview?.hero_name} ${slot} missing level`);
+        summary.top_upgrade_recommendations.push(`Capture ${hero.overview?.hero_name} gear levels`);
+        break;
+      }
+    }
+  });
+
+  // --- 5. Low refine detection ---
+  heroes.forEach(hero => {
+    const gear = hero.gear?.gear_slots || {};
+    for (const g of Object.values(gear)) {
+      if (g?.refine !== null && g.refine < 20) {
+        summary.weaknesses.push("Low gear refine detected");
+        summary.top_upgrade_recommendations.push("Increase gear refine levels");
+        break;
+      }
+    }
+  });
+
+  // --- 6. Deduplicate lists ---
+  summary.strengths = [...new Set(summary.strengths)];
+  summary.weaknesses = [...new Set(summary.weaknesses)];
+  summary.top_upgrade_recommendations = [...new Set(summary.top_upgrade_recommendations)];
+
+  summary.updated_at = nowIso();
+
+  player.summary = summary;
+}
+
     async function ocr(file) {
       const result = await Tesseract.recognize(file, "eng");
       return result?.data?.text || "";
@@ -1408,6 +1504,7 @@ async function readGovernor() {
   playerRecord.governor = record.governor || null;
 
   updatePlayerSummaryFromRecords(playerRecord);
+generatePlayerSummary(playerRecord);
   setDb(db);
 
   refreshPlayerList(record.player_id);
