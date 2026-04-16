@@ -691,6 +691,24 @@ function generateRoleScores(player) {
     return values.reduce((a, b) => a + b, 0) / values.length;
   })();
 
+  const cavalryHeroesBuilt = heroes.filter(
+    h =>
+      h?.overview?.troop_type === "cavalry" &&
+      h?.analysis?.data_completeness?.overall_percent === 100
+  ).length;
+
+  const infantryHeroesBuilt = heroes.filter(
+    h =>
+      h?.overview?.troop_type === "infantry" &&
+      h?.analysis?.data_completeness?.overall_percent === 100
+  ).length;
+
+  const archerHeroesBuilt = heroes.filter(
+    h =>
+      h?.overview?.troop_type === "archers" &&
+      h?.analysis?.data_completeness?.overall_percent === 100
+  ).length;
+
   const heroCompletenessBonus = heroCount ? (fullyBuiltHeroes / heroCount) * 10 : 0;
 
   const deployment = safe(military.deployment_capacity);
@@ -702,103 +720,127 @@ function generateRoleScores(player) {
   const territoryDefense = safe(cityDefense.territory_defense);
   const territoryAttack = safe(cityDefense.territory_attack);
 
+  // Bias / penalties
+  let infantryBiasPenalty = 0;
+  if (infShare < 0.34) infantryBiasPenalty += 40;
+  if (infShare < 0.30) infantryBiasPenalty += 20;
+  if (strongestTroopType !== "infantry") infantryBiasPenalty += 25;
+  if (infantryHeroesBuilt === 0) infantryBiasPenalty += 20;
+
+  let archerBearBonus = 0;
+  if (strongestTroopType === "archers") archerBearBonus += 20;
+  if (arcShare >= cavShare && arcShare >= infShare) archerBearBonus += 15;
+  if (archerHeroesBuilt > 0) archerBearBonus += 10;
+
+  let cavalryFieldBonus = 0;
+  if (strongestTroopType === "cavalry") cavalryFieldBonus += 15;
+  if (cavShare >= 0.33) cavalryFieldBonus += 10;
+  if (cavalryHeroesBuilt > 0) cavalryFieldBonus += 10;
+
   // Core roles
   const rallyLeader =
     arc.attack * 0.95 +
     arc.lethality * 0.9 +
     cav.attack * 0.35 +
-    inf.attack * 0.15 +
+    inf.attack * 0.10 +
     deployment / 2600 +
     kills / 85000 +
     avgHeroGearRefine * 0.18 +
     heroCompletenessBonus;
 
   const rallyJoiner =
-    arc.attack * 1.2 +
-    arc.lethality * 1.2 +
-    arcShare * 100 * 0.65 +
-    deployment / 3200 +
+    arc.attack * 1.25 +
+    arc.lethality * 1.25 +
+    arcShare * 100 * 0.75 +
+    deployment / 3400 +
     avgHeroGearRefine * 0.14 +
-    heroCompletenessBonus;
+    heroCompletenessBonus +
+    archerBearBonus;
 
   const garrison =
-    inf.defense * 1.15 +
-    inf.health * 1.2 +
-    infShare * 100 * 0.7 +
-    territoryDefense * 3.5 +
-    defensiveWins / 18 +
-    healing * 0.03 +
-    avgHeroGearRefine * 0.08 +
+    inf.defense * 1.1 +
+    inf.health * 1.15 +
+    infShare * 100 * 0.6 +
+    territoryDefense * 3.2 +
+    defensiveWins / 22 +
+    healing * 0.025 +
+    avgHeroGearRefine * 0.06 +
     heroCompletenessBonus -
-    arcShare * 100 * 0.18;
+    infantryBiasPenalty;
 
   const fieldFighter =
-    cav.attack * 0.95 +
-    cav.health * 0.7 +
-    arc.attack * 0.35 +
-    cavShare * 100 * 0.35 +
-    marchSpeed * 1.1 +
+    cav.attack * 1.0 +
+    cav.health * 0.75 +
+    arc.attack * 0.30 +
+    cavShare * 100 * 0.45 +
+    marchSpeed * 1.15 +
     attackerWins / 10 +
     avgHeroGearRefine * 0.12 +
-    heroCompletenessBonus;
+    heroCompletenessBonus +
+    cavalryFieldBonus;
 
   // Bear Hunt
   const bearLeaderDps =
-    arc.attack * 1.35 +
-    arc.lethality * 1.45 +
-    arcShare * 100 * 0.9 +
-    deployment / 3800 +
+    arc.attack * 1.4 +
+    arc.lethality * 1.5 +
+    arcShare * 100 * 1.0 +
+    deployment / 4000 +
     avgHeroGearRefine * 0.16 +
-    heroCompletenessBonus -
-    infShare * 100 * 0.15;
+    heroCompletenessBonus +
+    archerBearBonus -
+    infShare * 100 * 0.18;
 
   const bearJoinerDps =
-    arc.attack * 1.45 +
-    arc.lethality * 1.55 +
-    arcShare * 100 * 1.0 +
+    arc.attack * 1.5 +
+    arc.lethality * 1.6 +
+    arcShare * 100 * 1.1 +
     avgHeroGearRefine * 0.14 +
-    heroCompletenessBonus -
-    infShare * 100 * 0.18;
+    heroCompletenessBonus +
+    archerBearBonus -
+    infShare * 100 * 0.22;
 
   // Castle / KvK
   const castleRallyLeader =
-    rallyLeader * 0.95 +
+    rallyLeader * 0.96 +
     territoryAttack * 1.8 +
-    cav.attack * 0.18;
+    cav.attack * 0.15;
 
   const castleRallyJoiner =
-    rallyJoiner * 1.05 +
+    rallyJoiner * 1.06 +
     deployment / 5000;
 
   const castleGarrisonLeader =
-    garrison * 1.15 +
-    inf.defense * 0.15 +
-    inf.health * 0.15;
+    garrison * 1.08 +
+    inf.defense * 0.08 +
+    inf.health * 0.08 -
+    infantryBiasPenalty * 0.8;
 
   const castleGarrisonSupport =
-    garrison * 0.92 +
+    garrison * 0.9 +
     deployment / 2600 +
-    healing * 0.04;
+    healing * 0.035 -
+    infantryBiasPenalty * 0.55;
 
   const castleSoloAttacker =
-    fieldFighter * 0.88 +
+    fieldFighter * 0.9 +
     cav.attack * 0.18 +
     attackerWins / 14;
 
   // KvK extended
   const kvkFieldFighter =
-    fieldFighter * 1.08 +
-    cav.attack * 0.1;
+    fieldFighter * 1.1 +
+    cav.attack * 0.08;
 
   const kvkReinforcementPlayer =
-    garrison * 0.78 +
+    garrison * 0.7 +
     deployment / 2000 +
     healing * 0.05 +
-    heroCompletenessBonus;
+    heroCompletenessBonus -
+    infantryBiasPenalty * 0.35;
 
   const kvkFarmKiller =
     cav.attack * 0.8 +
-    cavShare * 100 * 0.4 +
+    cavShare * 100 * 0.45 +
     marchSpeed * 1.35 +
     attackerWins / 12 -
     infShare * 100 * 0.08;
@@ -812,17 +854,19 @@ function generateRoleScores(player) {
 
   const swordlandSupport =
     deployment / 1800 +
-    healing * 0.09 +
-    inf.defense * 0.18 +
-    cav.defense * 0.12 +
-    heroCompletenessBonus;
+    healing * 0.08 +
+    inf.defense * 0.12 +
+    cav.defense * 0.10 +
+    heroCompletenessBonus -
+    infantryBiasPenalty * 0.2;
 
   const swordlandDefender =
-    inf.defense * 0.95 +
-    inf.health * 1.0 +
-    territoryDefense * 2.5 +
-    defensiveWins / 14 +
-    avgHeroGearRefine * 0.08;
+    inf.defense * 0.8 +
+    inf.health * 0.85 +
+    territoryDefense * 2.2 +
+    defensiveWins / 16 +
+    avgHeroGearRefine * 0.06 -
+    infantryBiasPenalty * 0.75;
 
   summary.role_scores.rally_leader = round1(rallyLeader);
   summary.role_scores.rally_joiner = round1(rallyJoiner);
