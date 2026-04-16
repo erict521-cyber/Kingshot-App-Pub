@@ -583,12 +583,48 @@ function generateRoleScores(player) {
   if (!player) return;
 
   const summary = player.summary || {};
-  summary.role_scores = summary.role_scores || {};
+  summary.role_scores = {
+    rally_leader: null,
+    rally_joiner: null,
+    garrison: null,
+    field_fighter: null,
+
+    bear_hunt: {
+      rally_leader_dps: null,
+      joiner_dps: null
+    },
+
+    castle_kvk: {
+      rally_leader: null,
+      rally_joiner: null,
+      garrison_leader: null,
+      garrison_support: null,
+      solo_attacker: null
+    },
+
+    kvk_extended: {
+      field_fighter: null,
+      reinforcement_player: null,
+      farm_killer: null
+    },
+
+    swordland: {
+      attacker: null,
+      support: null,
+      defender: null
+    }
+  };
+
   summary.combat_profile = summary.combat_profile || {};
+  summary.combat_profile.strongest_troop_type = null;
+  summary.combat_profile.best_usage = [];
+  summary.combat_profile.secondary_roles = [];
+  summary.combat_profile.not_recommended_roles = [];
 
   const troopStats = player.governor?.troop_stats || {};
   const battle = player.governor?.battle || {};
   const military = player.governor?.military || {};
+  const cityDefense = player.governor?.city_defense || {};
   const troopTotals = player.troops?.troop_totals || {};
   const heroes = Object.values(player.heroes || {});
 
@@ -596,39 +632,49 @@ function generateRoleScores(player) {
     return typeof n === "number" && !isNaN(n) ? n : 0;
   }
 
-  function troopScore(type) {
-    const s = troopStats[type] || {};
-    return (
-      safe(s.attack) +
-      safe(s.defense) +
-      safe(s.health) +
-      safe(s.lethality)
-    );
+  function round1(n) {
+    return Math.round(n * 10) / 10;
   }
 
-  const infantryScore = troopScore("infantry");
-  const cavalryScore = troopScore("cavalry");
-  const archerScore = troopScore("archers");
+  function troopScore(type) {
+    const s = troopStats[type] || {};
+    return {
+      attack: safe(s.attack),
+      defense: safe(s.defense),
+      health: safe(s.health),
+      lethality: safe(s.lethality),
+      total:
+        safe(s.attack) +
+        safe(s.defense) +
+        safe(s.health) +
+        safe(s.lethality)
+    };
+  }
 
-  const totalTroops = safe(troopTotals.total) || (
-    safe(troopTotals.infantry) +
-    safe(troopTotals.cavalry) +
-    safe(troopTotals.archers)
-  );
+  const inf = troopScore("infantry");
+  const cav = troopScore("cavalry");
+  const arc = troopScore("archers");
 
-  const infantryShare = totalTroops ? safe(troopTotals.infantry) / totalTroops : 0;
-  const cavalryShare = totalTroops ? safe(troopTotals.cavalry) / totalTroops : 0;
-  const archerShare = totalTroops ? safe(troopTotals.archers) / totalTroops : 0;
+  const totalTroops =
+    safe(troopTotals.total) ||
+    (safe(troopTotals.infantry) + safe(troopTotals.cavalry) + safe(troopTotals.archers));
 
-  const strongestTroopScore = Math.max(infantryScore, cavalryScore, archerScore);
-  const strongestTroopType =
-    strongestTroopScore === archerScore ? "archers" :
-    strongestTroopScore === cavalryScore ? "cavalry" :
-    "infantry";
+  const infShare = totalTroops ? safe(troopTotals.infantry) / totalTroops : 0;
+  const cavShare = totalTroops ? safe(troopTotals.cavalry) / totalTroops : 0;
+  const arcShare = totalTroops ? safe(troopTotals.archers) / totalTroops : 0;
+
+  const typeScores = {
+    infantry: inf.total,
+    cavalry: cav.total,
+    archers: arc.total
+  };
+
+  const strongestTroopType = Object.entries(typeScores).sort((a, b) => b[1] - a[1])[0]?.[0] || null;
+  summary.combat_profile.strongest_troop_type = strongestTroopType;
 
   const heroCount = heroes.length;
-  const fullyBuiltHeroes = heroes.filter(h =>
-    h?.analysis?.data_completeness?.overall_percent === 100
+  const fullyBuiltHeroes = heroes.filter(
+    h => h?.analysis?.data_completeness?.overall_percent === 100
   ).length;
 
   const avgHeroGearRefine = (() => {
@@ -645,80 +691,169 @@ function generateRoleScores(player) {
     return values.reduce((a, b) => a + b, 0) / values.length;
   })();
 
-  const heroCompletenessBonus = heroCount ? (fullyBuiltHeroes / heroCount) * 20 : 0;
+  const heroCompletenessBonus = heroCount ? (fullyBuiltHeroes / heroCount) * 15 : 0;
 
-  // v1 scoring model
-  const bear =
-    archerScore * 0.45 +
-    cavalryScore * 0.15 +
-    infantryScore * 0.10 +
-    archerShare * 100 * 0.15 +
-    safe(battle.kills) / 50000 +
-    avgHeroGearRefine * 0.15 +
+  const deployment = safe(military.deployment_capacity);
+  const marchSpeed = safe(military.march_speed_up);
+  const healing = safe(military.healing_speed);
+  const attackerWins = safe(battle.attacker_victory);
+  const defensiveWins = safe(battle.defensive_victory);
+  const kills = safe(battle.kills);
+  const territoryDefense = safe(cityDefense.territory_defense);
+  const territoryAttack = safe(cityDefense.territory_attack);
+
+  // Core universal roles
+  const rallyLeader =
+    arc.attack * 0.9 +
+    arc.lethality * 0.9 +
+    cav.attack * 0.35 +
+    deployment / 1800 +
+    kills / 60000 +
+    avgHeroGearRefine * 0.25 +
     heroCompletenessBonus;
 
-  const castleAttack =
-    cavalryScore * 0.30 +
-    archerScore * 0.30 +
-    infantryScore * 0.10 +
-    cavalryShare * 100 * 0.10 +
-    archerShare * 100 * 0.10 +
-    safe(military.deployment_capacity) / 1500 +
-    avgHeroGearRefine * 0.15 +
+  const rallyJoiner =
+    arc.total * 0.8 +
+    cav.total * 0.35 +
+    arcShare * 100 * 0.3 +
+    deployment / 2200 +
+    avgHeroGearRefine * 0.18 +
     heroCompletenessBonus;
 
-  const castleDefense =
-    infantryScore * 0.35 +
-    cavalryScore * 0.15 +
-    archerScore * 0.10 +
-    infantryShare * 100 * 0.15 +
-    safe(player.governor?.city_defense?.territory_defense) * 2 +
-    safe(battle.defensive_victory) / 10 +
-    avgHeroGearRefine * 0.10 +
-    heroCompletenessBonus;
-
-  const fieldAttack =
-    cavalryScore * 0.30 +
-    archerScore * 0.30 +
-    infantryScore * 0.10 +
-    safe(military.march_speed_up) * 0.8 +
-    safe(battle.attacker_victory) / 8 +
-    avgHeroGearRefine * 0.15 +
-    heroCompletenessBonus;
-
-  const fieldDefense =
-    infantryScore * 0.25 +
-    cavalryScore * 0.20 +
-    archerScore * 0.15 +
-    safe(battle.defensive_victory) / 8 +
-    safe(military.healing_speed) * 0.08 +
+  const garrison =
+    inf.defense * 0.9 +
+    inf.health * 1.0 +
+    cav.defense * 0.2 +
+    infShare * 100 * 0.35 +
+    territoryDefense * 3 +
+    defensiveWins / 10 +
+    healing * 0.08 +
     avgHeroGearRefine * 0.12 +
     heroCompletenessBonus;
 
-  summary.role_scores = {
-    bear: Math.round(bear * 10) / 10,
-    castle_attack: Math.round(castleAttack * 10) / 10,
-    castle_defense: Math.round(castleDefense * 10) / 10,
-    field_attack: Math.round(fieldAttack * 10) / 10,
-    field_defense: Math.round(fieldDefense * 10) / 10
-  };
+  const fieldFighter =
+    cav.attack * 0.55 +
+    cav.health * 0.35 +
+    arc.attack * 0.35 +
+    marchSpeed * 1.0 +
+    attackerWins / 8 +
+    avgHeroGearRefine * 0.16 +
+    heroCompletenessBonus;
 
-  const roleEntries = Object.entries(summary.role_scores).sort((a, b) => b[1] - a[1]);
-  summary.combat_profile.best_role_overall = roleEntries[0]?.[0] || null;
-  summary.combat_profile.best_bear_role = "bear";
-  summary.combat_profile.best_castle_role =
-    summary.role_scores.castle_attack >= summary.role_scores.castle_defense
-      ? "castle_attack"
-      : "castle_defense";
-  summary.combat_profile.best_attack_role =
-    summary.role_scores.field_attack >= summary.role_scores.castle_attack
-      ? "field_attack"
-      : "castle_attack";
-  summary.combat_profile.best_defense_role =
-    summary.role_scores.field_defense >= summary.role_scores.castle_defense
-      ? "field_defense"
-      : "castle_defense";
-  summary.combat_profile.strongest_troop_type = strongestTroopType;
+  // Mode-specific
+  const bearLeaderDps =
+    arc.attack * 1.0 +
+    arc.lethality * 1.0 +
+    arcShare * 100 * 0.35 +
+    kills / 50000 +
+    avgHeroGearRefine * 0.28 +
+    heroCompletenessBonus;
+
+  const bearJoinerDps =
+    arc.attack * 0.95 +
+    arc.lethality * 0.95 +
+    arcShare * 100 * 0.45 +
+    avgHeroGearRefine * 0.22 +
+    heroCompletenessBonus;
+
+  const castleRallyLeader =
+    rallyLeader * 0.95 + territoryAttack * 2;
+
+  const castleRallyJoiner =
+    rallyJoiner * 1.02;
+
+  const castleGarrisonLeader =
+    garrison * 1.05 + territoryDefense * 2;
+
+  const castleGarrisonSupport =
+    garrison * 0.88 + deployment / 2600 + healing * 0.05;
+
+  const castleSoloAttacker =
+    fieldFighter * 0.9 + cav.attack * 0.25 + attackerWins / 12;
+
+  const kvkFieldFighter =
+    fieldFighter * 1.05;
+
+  const kvkReinforcementPlayer =
+    garrison * 0.7 + deployment / 1800 + healing * 0.08 + heroCompletenessBonus;
+
+  const kvkFarmKiller =
+    cav.attack * 0.7 +
+    cavShare * 100 * 0.3 +
+    marchSpeed * 1.2 +
+    attackerWins / 10 +
+    avgHeroGearRefine * 0.1;
+
+  const swordlandAttacker =
+    arc.attack * 0.45 +
+    cav.attack * 0.35 +
+    attackerWins / 9 +
+    avgHeroGearRefine * 0.16 +
+    heroCompletenessBonus;
+
+  const swordlandSupport =
+    deployment / 1700 +
+    healing * 0.12 +
+    inf.defense * 0.25 +
+    cav.defense * 0.2 +
+    heroCompletenessBonus;
+
+  const swordlandDefender =
+    inf.defense * 0.75 +
+    inf.health * 0.85 +
+    territoryDefense * 2 +
+    defensiveWins / 9 +
+    avgHeroGearRefine * 0.12 +
+    heroCompletenessBonus;
+
+  summary.role_scores.rally_leader = round1(rallyLeader);
+  summary.role_scores.rally_joiner = round1(rallyJoiner);
+  summary.role_scores.garrison = round1(garrison);
+  summary.role_scores.field_fighter = round1(fieldFighter);
+
+  summary.role_scores.bear_hunt.rally_leader_dps = round1(bearLeaderDps);
+  summary.role_scores.bear_hunt.joiner_dps = round1(bearJoinerDps);
+
+  summary.role_scores.castle_kvk.rally_leader = round1(castleRallyLeader);
+  summary.role_scores.castle_kvk.rally_joiner = round1(castleRallyJoiner);
+  summary.role_scores.castle_kvk.garrison_leader = round1(castleGarrisonLeader);
+  summary.role_scores.castle_kvk.garrison_support = round1(castleGarrisonSupport);
+  summary.role_scores.castle_kvk.solo_attacker = round1(castleSoloAttacker);
+
+  summary.role_scores.kvk_extended.field_fighter = round1(kvkFieldFighter);
+  summary.role_scores.kvk_extended.reinforcement_player = round1(kvkReinforcementPlayer);
+  summary.role_scores.kvk_extended.farm_killer = round1(kvkFarmKiller);
+
+  summary.role_scores.swordland.attacker = round1(swordlandAttacker);
+  summary.role_scores.swordland.support = round1(swordlandSupport);
+  summary.role_scores.swordland.defender = round1(swordlandDefender);
+
+  const allRoleEntries = [
+    ["rally_leader", summary.role_scores.rally_leader],
+    ["rally_joiner", summary.role_scores.rally_joiner],
+    ["garrison", summary.role_scores.garrison],
+    ["field_fighter", summary.role_scores.field_fighter],
+    ["rally_leader_dps", summary.role_scores.bear_hunt.rally_leader_dps],
+    ["joiner_dps", summary.role_scores.bear_hunt.joiner_dps],
+    ["garrison_leader", summary.role_scores.castle_kvk.garrison_leader],
+    ["garrison_support", summary.role_scores.castle_kvk.garrison_support],
+    ["solo_attacker", summary.role_scores.castle_kvk.solo_attacker],
+    ["reinforcement_player", summary.role_scores.kvk_extended.reinforcement_player],
+    ["farm_killer", summary.role_scores.kvk_extended.farm_killer],
+    ["attacker", summary.role_scores.swordland.attacker],
+    ["support", summary.role_scores.swordland.support],
+    ["defender", summary.role_scores.swordland.defender]
+  ].sort((a, b) => b[1] - a[1]);
+
+  const bestUsage = allRoleEntries.slice(0, 2).map(([name]) => name);
+  const secondaryRoles = allRoleEntries.slice(2, 5).map(([name]) => name);
+  const notRecommendedRoles = allRoleEntries.slice(-3).map(([name]) => name);
+
+  summary.combat_profile.best_usage = bestUsage;
+  summary.combat_profile.secondary_roles = secondaryRoles;
+  summary.combat_profile.not_recommended_roles = notRecommendedRoles;
+
+  player.summary = summary;
 }
 
     async function ocr(file) {
