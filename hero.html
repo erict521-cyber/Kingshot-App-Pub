@@ -223,36 +223,36 @@ function ensurePlayerRecord(db, playerId) {
       governor: null,
       heroes: {},
       summary: {
-        role_scores: {
-          bear: null,
-          castle_attack: null,
-          castle_defense: null,
-          field_attack: null,
-          field_defense: null
-        },
-        combat_profile: {
-          best_role_overall: null,
-          best_bear_role: null,
-          best_castle_role: null,
-          best_attack_role: null,
-          best_defense_role: null,
-          strongest_troop_type: null
-        },
-        strengths: [],
-        weaknesses: [],
-        top_upgrade_recommendations: [],
-        data_completeness: {
-          identity: false,
-          troops: false,
-          governor: false,
-          heroes_total: 0,
-          heroes_with_overview: 0,
-          heroes_with_stats: 0,
-          heroes_with_skills: 0,
-          heroes_with_gear: 0,
-          overall_percent: 0
-        },
-        updated_at: null
+  role_scores: {
+    bear: null,
+    castle_attack: null,
+    castle_defense: null,
+    field_attack: null,
+    field_defense: null
+  },
+  combat_profile: {
+    best_role_overall: null,
+    best_bear_role: null,
+    best_castle_role: null,
+    best_attack_role: null,
+    best_defense_role: null,
+    strongest_troop_type: null
+  },
+  strengths: [],
+  weaknesses: [],
+  top_upgrade_recommendations: [],
+  data_completeness: {
+    identity: false,
+    troops: false,
+    governor: false,
+    heroes_total: 0,
+    heroes_with_overview: 0,
+    heroes_with_stats: 0,
+    heroes_with_skills: 0,
+    heroes_with_gear: 0,
+    overall_percent: 0
+  },
+  updated_at: null
       },
       meta: {
         updated_at: null,
@@ -374,6 +374,28 @@ function getSkillSlotRegions() {
     slot_5: [0.832, 0.362, 0.944, 0.423],
     slot_6: [0.765, 0.474, 0.875, 0.535]
   };
+}
+
+function updateHeroCompleteness(heroRecord) {
+  const hasOverview = !!heroRecord.overview;
+  const hasStats = !!heroRecord.stats;
+  const hasSkills = !!heroRecord.skills;
+  const hasGear = !!heroRecord.gear;
+
+  const checks = [hasOverview, hasStats, hasSkills, hasGear];
+  const completed = checks.filter(Boolean).length;
+  const overallPercent = Math.round((completed / checks.length) * 100);
+
+  heroRecord.analysis = heroRecord.analysis || {};
+  heroRecord.analysis.data_completeness = {
+    overview: hasOverview,
+    stats: hasStats,
+    skills: hasSkills,
+    gear: hasGear,
+    overall_percent: overallPercent
+  };
+
+  heroRecord.analysis.updated_at = nowIso();
 }
 
 function cropCanvasRect(source, x1, y1, x2, y2) {
@@ -1374,6 +1396,7 @@ function saveHero() {
   heroRecord.overview = currentHeroOverview;
   heroRecord.meta.updated_at = nowIso();
 
+  updateHeroCompleteness(heroRecord);
   updatePlayerSummaryFromRecords(playerRecord);
   setDb(db);
 
@@ -1405,6 +1428,7 @@ function saveHeroStats() {
   heroRecord.stats = currentHeroStats;
   heroRecord.meta.updated_at = nowIso();
 
+  updateHeroCompleteness(heroRecord);
   updatePlayerSummaryFromRecords(playerRecord);
   setDb(db);
 
@@ -1434,6 +1458,7 @@ function saveHeroSkills() {
   heroRecord.skills = parsed;
   heroRecord.meta.updated_at = nowIso();
 
+  updateHeroCompleteness(heroRecord);
   updatePlayerSummaryFromRecords(playerRecord);
   setDb(db);
 
@@ -1463,6 +1488,7 @@ function saveHeroGear() {
   heroRecord.gear = parsed;
   heroRecord.meta.updated_at = nowIso();
 
+  updateHeroCompleteness(heroRecord);
   updatePlayerSummaryFromRecords(playerRecord);
   setDb(db);
 
