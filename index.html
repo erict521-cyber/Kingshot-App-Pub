@@ -579,6 +579,148 @@ function generatePlayerSummary(player) {
   player.summary = summary;
 }
 
+function generateRoleScores(player) {
+  if (!player) return;
+
+  const summary = player.summary || {};
+  summary.role_scores = summary.role_scores || {};
+  summary.combat_profile = summary.combat_profile || {};
+
+  const troopStats = player.governor?.troop_stats || {};
+  const battle = player.governor?.battle || {};
+  const military = player.governor?.military || {};
+  const troopTotals = player.troops?.troop_totals || {};
+  const heroes = Object.values(player.heroes || {});
+
+  function safe(n) {
+    return typeof n === "number" && !isNaN(n) ? n : 0;
+  }
+
+  function troopScore(type) {
+    const s = troopStats[type] || {};
+    return (
+      safe(s.attack) +
+      safe(s.defense) +
+      safe(s.health) +
+      safe(s.lethality)
+    );
+  }
+
+  const infantryScore = troopScore("infantry");
+  const cavalryScore = troopScore("cavalry");
+  const archerScore = troopScore("archers");
+
+  const totalTroops = safe(troopTotals.total) || (
+    safe(troopTotals.infantry) +
+    safe(troopTotals.cavalry) +
+    safe(troopTotals.archers)
+  );
+
+  const infantryShare = totalTroops ? safe(troopTotals.infantry) / totalTroops : 0;
+  const cavalryShare = totalTroops ? safe(troopTotals.cavalry) / totalTroops : 0;
+  const archerShare = totalTroops ? safe(troopTotals.archers) / totalTroops : 0;
+
+  const strongestTroopScore = Math.max(infantryScore, cavalryScore, archerScore);
+  const strongestTroopType =
+    strongestTroopScore === archerScore ? "archers" :
+    strongestTroopScore === cavalryScore ? "cavalry" :
+    "infantry";
+
+  const heroCount = heroes.length;
+  const fullyBuiltHeroes = heroes.filter(h =>
+    h?.analysis?.data_completeness?.overall_percent === 100
+  ).length;
+
+  const avgHeroGearRefine = (() => {
+    const values = [];
+    heroes.forEach(hero => {
+      const gear = hero?.gear?.gear_slots || {};
+      Object.values(gear).forEach(slot => {
+        if (slot?.refine !== null && slot?.refine !== undefined) {
+          values.push(slot.refine);
+        }
+      });
+    });
+    if (!values.length) return 0;
+    return values.reduce((a, b) => a + b, 0) / values.length;
+  })();
+
+  const heroCompletenessBonus = heroCount ? (fullyBuiltHeroes / heroCount) * 20 : 0;
+
+  // v1 scoring model
+  const bear =
+    archerScore * 0.45 +
+    cavalryScore * 0.15 +
+    infantryScore * 0.10 +
+    archerShare * 100 * 0.15 +
+    safe(battle.kills) / 50000 +
+    avgHeroGearRefine * 0.15 +
+    heroCompletenessBonus;
+
+  const castleAttack =
+    cavalryScore * 0.30 +
+    archerScore * 0.30 +
+    infantryScore * 0.10 +
+    cavalryShare * 100 * 0.10 +
+    archerShare * 100 * 0.10 +
+    safe(military.deployment_capacity) / 1500 +
+    avgHeroGearRefine * 0.15 +
+    heroCompletenessBonus;
+
+  const castleDefense =
+    infantryScore * 0.35 +
+    cavalryScore * 0.15 +
+    archerScore * 0.10 +
+    infantryShare * 100 * 0.15 +
+    safe(player.governor?.city_defense?.territory_defense) * 2 +
+    safe(battle.defensive_victory) / 10 +
+    avgHeroGearRefine * 0.10 +
+    heroCompletenessBonus;
+
+  const fieldAttack =
+    cavalryScore * 0.30 +
+    archerScore * 0.30 +
+    infantryScore * 0.10 +
+    safe(military.march_speed_up) * 0.8 +
+    safe(battle.attacker_victory) / 8 +
+    avgHeroGearRefine * 0.15 +
+    heroCompletenessBonus;
+
+  const fieldDefense =
+    infantryScore * 0.25 +
+    cavalryScore * 0.20 +
+    archerScore * 0.15 +
+    safe(battle.defensive_victory) / 8 +
+    safe(military.healing_speed) * 0.08 +
+    avgHeroGearRefine * 0.12 +
+    heroCompletenessBonus;
+
+  summary.role_scores = {
+    bear: Math.round(bear * 10) / 10,
+    castle_attack: Math.round(castleAttack * 10) / 10,
+    castle_defense: Math.round(castleDefense * 10) / 10,
+    field_attack: Math.round(fieldAttack * 10) / 10,
+    field_defense: Math.round(fieldDefense * 10) / 10
+  };
+
+  const roleEntries = Object.entries(summary.role_scores).sort((a, b) => b[1] - a[1]);
+  summary.combat_profile.best_role_overall = roleEntries[0]?.[0] || null;
+  summary.combat_profile.best_bear_role = "bear";
+  summary.combat_profile.best_castle_role =
+    summary.role_scores.castle_attack >= summary.role_scores.castle_defense
+      ? "castle_attack"
+      : "castle_defense";
+  summary.combat_profile.best_attack_role =
+    summary.role_scores.field_attack >= summary.role_scores.castle_attack
+      ? "field_attack"
+      : "castle_attack";
+  summary.combat_profile.best_defense_role =
+    summary.role_scores.field_defense >= summary.role_scores.castle_defense
+      ? "field_defense"
+      : "castle_defense";
+  summary.combat_profile.strongest_troop_type = strongestTroopType;
+}
+
     async function ocr(file) {
       const result = await Tesseract.recognize(file, "eng");
       return result?.data?.text || "";
