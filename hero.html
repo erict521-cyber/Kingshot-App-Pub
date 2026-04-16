@@ -213,6 +213,140 @@ function nowIso() {
   return new Date().toISOString();
 }
 
+function ensurePlayerRecord(db, playerId) {
+  if (!db.players[playerId]) {
+    db.players[playerId] = {
+      player_id: playerId,
+      identity: null,
+      troops: null,
+      governor: null,
+      heroes: {},
+      summary: {
+        role_scores: {
+          bear: null,
+          castle_attack: null,
+          castle_defense: null,
+          field_attack: null,
+          field_defense: null
+        },
+        combat_profile: {
+          best_role_overall: null,
+          best_bear_role: null,
+          best_castle_role: null,
+          best_attack_role: null,
+          best_defense_role: null,
+          strongest_troop_type: null
+        },
+        strengths: [],
+        weaknesses: [],
+        top_upgrade_recommendations: [],
+        data_completeness: {
+          identity: false,
+          troops: false,
+          governor: false,
+          heroes_total: 0,
+          heroes_with_overview: 0,
+          heroes_with_stats: 0,
+          heroes_with_skills: 0,
+          heroes_with_gear: 0,
+          overall_percent: 0
+        },
+        updated_at: null
+      },
+      meta: {
+        updated_at: null,
+        last_analysis_at: null,
+        warnings: [
+          "Hero gear is modeled as current loadout snapshots. Re-capture all affected heroes after gear swaps to maintain accuracy."
+        ]
+      }
+    };
+  }
+
+  if (!db.players[playerId].heroes) {
+    db.players[playerId].heroes = {};
+  }
+
+  return db.players[playerId];
+}
+
+function ensureHeroRecord(playerRecord, heroName) {
+  if (!playerRecord.heroes[heroName]) {
+    playerRecord.heroes[heroName] = {
+      overview: null,
+      stats: null,
+      skills: null,
+      gear: null,
+      analysis: {
+        role_scores: {},
+        strengths: [],
+        weaknesses: [],
+        upgrade_recommendations: [],
+        data_completeness: {
+          overview: false,
+          stats: false,
+          skills: false,
+          gear: false,
+          overall_percent: 0
+        },
+        updated_at: null
+      },
+      meta: {
+        updated_at: null
+      }
+    };
+  }
+
+  return playerRecord.heroes[heroName];
+}
+
+function updatePlayerSummaryFromRecords(playerRecord) {
+  const heroes = Object.values(playerRecord.heroes || {});
+
+  const heroesWithOverview = heroes.filter(h => !!h.overview).length;
+  const heroesWithStats = heroes.filter(h => !!h.stats).length;
+  const heroesWithSkills = heroes.filter(h => !!h.skills).length;
+  const heroesWithGear = heroes.filter(h => !!h.gear).length;
+
+  const hasIdentity = !!playerRecord.identity;
+  const hasTroops = !!playerRecord.troops;
+  const hasGovernor = !!playerRecord.governor;
+
+  const checks = [
+    hasIdentity,
+    hasTroops,
+    hasGovernor
+  ];
+
+  const heroChecks = [
+    heroesWithOverview > 0,
+    heroesWithStats > 0,
+    heroesWithSkills > 0,
+    heroesWithGear > 0
+  ];
+
+  const allChecks = [...checks, ...heroChecks];
+  const completed = allChecks.filter(Boolean).length;
+  const overallPercent = Math.round((completed / allChecks.length) * 100);
+
+  playerRecord.summary = playerRecord.summary || {};
+  playerRecord.summary.data_completeness = {
+    identity: hasIdentity,
+    troops: hasTroops,
+    governor: hasGovernor,
+    heroes_total: heroes.length,
+    heroes_with_overview: heroesWithOverview,
+    heroes_with_stats: heroesWithStats,
+    heroes_with_skills: heroesWithSkills,
+    heroes_with_gear: heroesWithGear,
+    overall_percent: overallPercent
+  };
+
+  playerRecord.summary.updated_at = nowIso();
+  playerRecord.meta = playerRecord.meta || {};
+  playerRecord.meta.updated_at = nowIso();
+}
+
 function cleanInt(s) {
   return parseInt(String(s || "").replace(/,/g, "").replace(/[^\d]/g, ""), 10) || 0;
 }
