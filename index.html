@@ -1823,6 +1823,10 @@ async function readGovernor() {
   setStatus("saveStatus", "Cleared current parse.", "ok");
 }
 
+function validatePlayerRecord(record) {
+  // return { is_valid, errors, warnings }
+}
+
     function saveCurrentRecord() {
   const record = buildCombinedRecord();
   if (!record.player_id) {
