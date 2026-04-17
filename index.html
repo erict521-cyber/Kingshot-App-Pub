@@ -2046,14 +2046,17 @@ if (totalPower > 0 && breakdownParts.length >= 4) {
   playerRecord.player_id = record.player_id;
   if (record.identity) {
   playerRecord.identity = record.identity;
+  playerRecord.identity.saved_at = nowIso();
 }
 
 if (record.troops) {
   playerRecord.troops = record.troops;
+  playerRecord.troops.saved_at = nowIso();
 }
 
 if (record.governor) {
   playerRecord.governor = record.governor;
+  playerRecord.governor.saved_at = nowIso();
 }
 
   updatePlayerSummaryFromRecords(playerRecord);
