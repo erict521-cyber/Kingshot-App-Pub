@@ -1824,7 +1824,92 @@ async function readGovernor() {
 }
 
 function validatePlayerRecord(record) {
-  // return { is_valid, errors, warnings }
+  const errors = [];
+  const warnings = [];
+
+  // --- Identity checks ---
+  if (!record.player_id) {
+    errors.push("Missing player_id");
+  }
+
+  if (!record.identity?.player_name?.value) {
+    errors.push("Missing player_name");
+  }
+
+  // --- Troops checks ---
+  if (!record.troops || !record.troops.troop_totals) {
+    errors.push("Missing troop data");
+  } else {
+    const t = record.troops.troop_totals;
+
+if (!t.total || t.total <= 0) {
+  errors.push("Invalid troop totals");
+}
+
+if (
+  (!t.infantry || t.infantry === 0) &&
+  (!t.cavalry || t.cavalry === 0) &&
+  (!t.archers || t.archers === 0)
+) {
+  errors.push("No troop types detected");
+}
+}
+
+  // --- Governor checks ---
+  if (!record.governor) {
+    errors.push("Missing governor data");
+  } else {
+    if (!record.governor.military?.deployment_capacity) {
+      errors.push("Missing deployment capacity");
+    }
+
+    
+const stats = record.governor.troop_stats || {};
+
+const hasAnyStat =
+  stats.infantry?.attack ||
+  stats.cavalry?.attack ||
+  stats.archers?.attack;
+
+if (!hasAnyStat) {
+  errors.push("No troop stats detected");
+}
+    }
+  }
+
+  // --- Global sanity ---
+  const power = record.identity?.power?.value;
+  if (!power || power <= 0) {
+    warnings.push("Invalid or missing power");
+  }
+
+  const kills = record.identity?.kills?.value;
+  if (kills == null || kills < 0) {
+    warnings.push("Invalid kills value");
+  }
+
+  // --- Merge existing review flags ---
+  if (record.identity?.review_flags?.length) {
+    warnings.push(...record.identity.review_flags);
+  }
+
+  if (record.troops?.review_flags?.length) {
+    warnings.push(...record.troops.review_flags);
+  }
+
+if (power && power < 1000000) {
+  warnings.push("Power unusually low - possible OCR issue");
+}
+
+  if (record.governor?.review_flags?.length) {
+    warnings.push(...record.governor.review_flags);
+  }
+
+  return {
+    is_valid: errors.length === 0,
+    errors,
+    warnings
+  };
 }
 
     function saveCurrentRecord() {
