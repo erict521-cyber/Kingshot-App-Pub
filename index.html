@@ -244,6 +244,7 @@
       <div>
         <button onclick="saveCurrentRecord()">Save / Update Player</button>
         <button onclick="clearCurrentParse()">Clear Current Parse</button>
+<button onclick="rebuildFromCurrent()">Rebuild from OCR</button>
       </div>
       <div id="saveStatus" class="status"></div>
       <textarea id="combinedRecord" placeholder="Combined record will appear here."></textarea>
@@ -306,6 +307,16 @@ let currentGovernor = null;
     function cleanInt(s) {
       return parseInt(String(s || "").replace(/,/g, "").replace(/[^\d]/g, ""), 10) || 0;
     }
+
+function rebuildFromCurrent() {
+  document.getElementById("combinedRecord").value = JSON.stringify(
+    buildCombinedRecordFromCurrentState(),
+    null,
+    2
+  );
+
+  setStatus("saveStatus", "Rebuilt from OCR data.", "ok");
+}
 
     function parseShorthandNumber(raw) {
       const s = String(raw || "").trim().replace(/,/g, "");
