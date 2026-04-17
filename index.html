@@ -1912,8 +1912,14 @@ function validatePlayerRecord(record) {
 
     function saveCurrentRecord() {
   const record = buildCombinedRecord();
-  if (!record.player_id) {
-    setStatus("saveStatus", "Cannot save without player_id.", "warn");
+  const validation = validatePlayerRecord(record);
+
+  if (!validation.is_valid) {
+    setStatus(
+      "saveStatus",
+      `Cannot save: ${validation.errors.join("; ")}`,
+      "warn"
+    );
     return;
   }
 
@@ -1926,15 +1932,24 @@ function validatePlayerRecord(record) {
   playerRecord.governor = record.governor || null;
 
   updatePlayerSummaryFromRecords(playerRecord);
-generatePlayerSummary(playerRecord);
-generateRoleScores(playerRecord);
-setDb(db);
+  generatePlayerSummary(playerRecord);
+  generateRoleScores(playerRecord);
+
+  setDb(db);
 
   refreshPlayerList(record.player_id);
   refreshSavedPlayersTable();
   refreshDatabaseBox();
 
-  setStatus("saveStatus", `Saved player ${record.player_id}.`, "ok");
+  if (validation.warnings.length) {
+    setStatus(
+      "saveStatus",
+      `Saved with warnings: ${validation.warnings.join("; ")}`,
+      "warn"
+    );
+  } else {
+    setStatus("saveStatus", `Saved player ${record.player_id}.`, "ok");
+  }
 }
 
     function refreshPlayerList(selectedId = "") {
