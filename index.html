@@ -2044,9 +2044,17 @@ if (totalPower > 0 && breakdownParts.length >= 4) {
   const playerRecord = ensurePlayerRecord(db, record.player_id);
 
   playerRecord.player_id = record.player_id;
-  playerRecord.identity = record.identity || null;
-  playerRecord.troops = record.troops || null;
-  playerRecord.governor = record.governor || null;
+  if (record.identity) {
+  playerRecord.identity = record.identity;
+}
+
+if (record.troops) {
+  playerRecord.troops = record.troops;
+}
+
+if (record.governor) {
+  playerRecord.governor = record.governor;
+}
 
   updatePlayerSummaryFromRecords(playerRecord);
   generatePlayerSummary(playerRecord);
