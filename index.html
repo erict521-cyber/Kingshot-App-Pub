@@ -253,6 +253,7 @@
 <button onclick="runValidation()">Validate Record</button>
 <div id="validationStatus" class="status"></div>
 <textarea id="validationOutput" placeholder="Validation results will appear here."></textarea>
+<textarea id="missingSummary" placeholder="Missing / problem fields will appear here."></textarea>
 
     <div class="card">
       <b>Saved players</b>
@@ -350,6 +351,33 @@ function rebuildFromCurrent() {
     function nowIso() {
       return new Date().toISOString();
     }
+
+function generateMissingSummary(record) {
+  const missing = [];
+
+  if (!record.player_id) missing.push("player_id");
+
+  if (!record.identity?.player_name?.value) missing.push("identity.player_name");
+  if (!record.identity?.power?.value) missing.push("identity.power");
+  if (!record.identity?.kills?.value) missing.push("identity.kills");
+
+  if (!record.troops?.troop_totals?.total) missing.push("troops.total");
+
+  if (!record.governor?.military?.deployment_capacity) {
+    missing.push("governor.deployment_capacity");
+  }
+
+  const stats = record.governor?.troop_stats || {};
+  if (
+    !stats.infantry?.attack &&
+    !stats.cavalry?.attack &&
+    !stats.archers?.attack
+  ) {
+    missing.push("governor.troop_stats");
+  }
+
+  return missing;
+}
 
 function ensurePlayerRecord(db, playerId) {
   if (!db.players[playerId]) {
@@ -475,6 +503,9 @@ function runValidation() {
   } else {
     setStatus("validationStatus", "Valid record.", "ok");
   }
+const missing = generateMissingSummary(record);
+document.getElementById("missingSummary").value =
+  missing.length ? missing.join("\n") : "No missing critical fields.";
 }
 
 function updatePlayerSummaryFromRecords(playerRecord) {
