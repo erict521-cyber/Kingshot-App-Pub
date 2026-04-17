@@ -1785,7 +1785,19 @@ async function readGovernor() {
   }
 }
 
-    function buildCombinedRecord() {
+    function buildCombinedRecordFromCurrentState() {
+  const playerId = currentIdentity?.player_id?.value || "";
+
+  return {
+    player_id: playerId,
+    identity: currentIdentity || null,
+    troops: currentTroops || null,
+    governor: currentGovernor || null,
+    updated_at: nowIso()
+  };
+}
+
+function buildCombinedRecord() {
   const combinedText = document.getElementById("combinedRecord")?.value?.trim();
 
   if (combinedText) {
@@ -1803,19 +1815,16 @@ async function readGovernor() {
     }
   }
 
-  const playerId = currentIdentity?.player_id?.value || "";
-  return {
-    player_id: playerId,
-    identity: currentIdentity,
-    troops: currentTroops,
-    governor: currentGovernor,
-    updated_at: nowIso()
-  };
+  return buildCombinedRecordFromCurrentState();
 }
 
     function showCombinedRecord() {
-      document.getElementById("combinedRecord").value = JSON.stringify(buildCombinedRecord(), null, 2);
-    }
+  document.getElementById("combinedRecord").value = JSON.stringify(
+    buildCombinedRecordFromCurrentState(),
+    null,
+    2
+  );
+}
 
     function buildRecord() {
       showCombinedRecord();
