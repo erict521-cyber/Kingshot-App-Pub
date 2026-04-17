@@ -2028,6 +2028,10 @@ if (totalPower > 0 && breakdownParts.length >= 4) {
 }
 
     function saveCurrentRecord() {
+if (!record.player_id) {
+  setStatus("saveStatus", "Cannot save: missing player_id", "warn");
+  return;
+}
   const record = buildCombinedRecord();
   const validation = validatePlayerRecord(record);
 
