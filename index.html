@@ -291,6 +291,41 @@
     let currentTroops = null;
 let currentGovernor = null;
 
+function validateSavePayload(record) {
+  const errors = [];
+  const warnings = [];
+
+  if (!record.player_id) {
+    errors.push("Missing player_id");
+  }
+
+  const hasIdentity = !!record.identity;
+  const hasTroops = !!record.troops;
+  const hasGovernor = !!record.governor;
+
+  if (!hasIdentity && !hasTroops && !hasGovernor) {
+    errors.push("No section data to save");
+  }
+
+  if (hasIdentity && !record.identity?.player_name?.value) {
+    warnings.push("Identity section missing player_name");
+  }
+
+  if (hasTroops && !record.troops?.troop_totals?.total) {
+    warnings.push("Troops section missing totals");
+  }
+
+  if (hasGovernor && !record.governor?.military?.deployment_capacity) {
+    warnings.push("Governor section missing deployment capacity");
+  }
+
+  return {
+    is_valid: errors.length === 0,
+    errors,
+    warnings
+  };
+}
+
     function setStatus(id, msg = "", cls = "") {
       const el = document.getElementById(id);
       if (!el) return;
@@ -2030,7 +2065,7 @@ if (totalPower > 0 && breakdownParts.length >= 4) {
     function saveCurrentRecord() {
 
   const record = buildCombinedRecord();
-  const validation = validatePlayerRecord(record);
+  const validation = validateSavePayload(record);
 
   if (!validation.is_valid) {
     setStatus(
