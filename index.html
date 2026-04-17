@@ -1786,6 +1786,23 @@ async function readGovernor() {
 }
 
     function buildCombinedRecord() {
+  const combinedText = document.getElementById("combinedRecord")?.value?.trim();
+
+  if (combinedText) {
+    try {
+      const parsed = JSON.parse(combinedText);
+      return {
+        player_id: parsed.player_id || "",
+        identity: parsed.identity || null,
+        troops: parsed.troops || null,
+        governor: parsed.governor || null,
+        updated_at: nowIso()
+      };
+    } catch (err) {
+      console.error("Invalid combined record JSON", err);
+    }
+  }
+
   const playerId = currentIdentity?.player_id?.value || "";
   return {
     player_id: playerId,
@@ -1795,6 +1812,7 @@ async function readGovernor() {
     updated_at: nowIso()
   };
 }
+
     function showCombinedRecord() {
       document.getElementById("combinedRecord").value = JSON.stringify(buildCombinedRecord(), null, 2);
     }
