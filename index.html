@@ -242,13 +242,16 @@
         This combines current identity + current troop capture.
       </div>
       <div>
-        <button onclick="buildRecord()">Build Record</button>
         <button onclick="saveCurrentRecord()">Save / Update Player</button>
         <button onclick="clearCurrentParse()">Clear Current Parse</button>
       </div>
       <div id="saveStatus" class="status"></div>
       <textarea id="combinedRecord" placeholder="Combined record will appear here."></textarea>
     </div>
+ <button onclick="buildRecord()">Build Record</button>
+<button onclick="runValidation()">Validate Record</button>
+<div id="validationStatus" class="status"></div>
+<textarea id="validationOutput" placeholder="Validation results will appear here."></textarea>
 
     <div class="card">
       <b>Saved players</b>
@@ -437,6 +440,30 @@ function ensurePlayerRecord(db, playerId) {
   }
 
   return db.players[playerId];
+}
+
+function runValidation() {
+  const record = buildCombinedRecord();
+  const validation = validatePlayerRecord(record);
+
+  document.getElementById("validationOutput").value =
+    JSON.stringify(validation, null, 2);
+
+  if (!validation.is_valid) {
+    setStatus(
+      "validationStatus",
+      `Invalid: ${validation.errors.join("; ")}`,
+      "warn"
+    );
+  } else if (validation.warnings.length) {
+    setStatus(
+      "validationStatus",
+      `Valid with warnings: ${validation.warnings.join("; ")}`,
+      "warn"
+    );
+  } else {
+    setStatus("validationStatus", "Valid record.", "ok");
+  }
 }
 
 function updatePlayerSummaryFromRecords(playerRecord) {
