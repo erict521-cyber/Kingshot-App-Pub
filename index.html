@@ -1842,18 +1842,18 @@ function validatePlayerRecord(record) {
   } else {
     const t = record.troops.troop_totals;
 
-if (!t.total || t.total <= 0) {
-  errors.push("Invalid troop totals");
-}
+    if (!t.total || t.total <= 0) {
+      errors.push("Invalid troop totals");
+    }
 
-if (
-  (!t.infantry || t.infantry === 0) &&
-  (!t.cavalry || t.cavalry === 0) &&
-  (!t.archers || t.archers === 0)
-) {
-  errors.push("No troop types detected");
-}
-}
+    if (
+      (!t.infantry || t.infantry === 0) &&
+      (!t.cavalry || t.cavalry === 0) &&
+      (!t.archers || t.archers === 0)
+    ) {
+      errors.push("No troop types detected");
+    }
+  }
 
   // --- Governor checks ---
   if (!record.governor) {
@@ -1863,17 +1863,15 @@ if (
       errors.push("Missing deployment capacity");
     }
 
-    
-const stats = record.governor.troop_stats || {};
+    const stats = record.governor.troop_stats || {};
 
-const hasAnyStat =
-  stats.infantry?.attack ||
-  stats.cavalry?.attack ||
-  stats.archers?.attack;
+    const hasAnyStat =
+      stats.infantry?.attack ||
+      stats.cavalry?.attack ||
+      stats.archers?.attack;
 
-if (!hasAnyStat) {
-  errors.push("No troop stats detected");
-}
+    if (!hasAnyStat) {
+      errors.push("No troop stats detected");
     }
   }
 
@@ -1881,6 +1879,10 @@ if (!hasAnyStat) {
   const power = record.identity?.power?.value;
   if (!power || power <= 0) {
     warnings.push("Invalid or missing power");
+  }
+
+  if (power && power < 1000000) {
+    warnings.push("Power unusually low - possible OCR issue");
   }
 
   const kills = record.identity?.kills?.value;
@@ -1896,10 +1898,6 @@ if (!hasAnyStat) {
   if (record.troops?.review_flags?.length) {
     warnings.push(...record.troops.review_flags);
   }
-
-if (power && power < 1000000) {
-  warnings.push("Power unusually low - possible OCR issue");
-}
 
   if (record.governor?.review_flags?.length) {
     warnings.push(...record.governor.review_flags);
