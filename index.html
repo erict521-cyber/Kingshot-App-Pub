@@ -2070,6 +2070,14 @@ function validatePlayerRecord(record) {
     ) {
       errors.push("No troop types detected");
     }
+const familySum =
+  (t.infantry || 0) +
+  (t.cavalry || 0) +
+  (t.archers || 0);
+
+if (t.total && familySum !== t.total) {
+  warnings.push("Troop total does not match troop family sum");
+}
   }
 
   // --- Governor checks ---
