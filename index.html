@@ -1958,12 +1958,31 @@ function buildCombinedRecord() {
   return buildCombinedRecordFromCurrentState();
 }
 
-    function showCombinedRecord() {
-  document.getElementById("combinedRecord").value = JSON.stringify(
-    buildCombinedRecordFromCurrentState(),
-    null,
-    2
-  );
+function showCombinedRecord() {
+  const record = buildCombinedRecord();
+
+  function ageLabel(ts) {
+    if (!ts) return "missing";
+    const diff = Date.now() - new Date(ts).getTime();
+    const min = Math.floor(diff / 60000);
+    if (min < 1) return "just now";
+    if (min < 60) return `${min}m ago`;
+    const hr = Math.floor(min / 60);
+    return `${hr}h ago`;
+  }
+
+  const identityAge = ageLabel(record.identity?.saved_at);
+  const troopsAge = ageLabel(record.troops?.saved_at);
+  const governorAge = ageLabel(record.governor?.saved_at);
+
+  const header =
+    `=== DATA FRESHNESS ===\n` +
+    `Identity: ${identityAge}\n` +
+    `Troops: ${troopsAge}\n` +
+    `Governor: ${governorAge}\n\n`;
+
+  document.getElementById("combinedRecord").value =
+    header + JSON.stringify(record, null, 2);
 }
 
     function buildRecord() {
