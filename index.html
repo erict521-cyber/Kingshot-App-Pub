@@ -401,6 +401,14 @@ function getSectionStatus(section, type) {
 }
 
 function renderReviewFindings(record, validation) {
+const importantWarnings = (validation.warnings || []).filter(w =>
+  w.toLowerCase().includes("suspicious") ||
+  w.toLowerCase().includes("mismatch")
+);
+
+const minorWarnings = (validation.warnings || []).filter(w =>
+  !importantWarnings.includes(w)
+);
   const missing = generateMissingSummary(record);
 
   function renderList(items, emptyText) {
@@ -417,8 +425,17 @@ function renderReviewFindings(record, validation) {
       <div><b>Errors</b></div>
       ${renderList(validation.errors, "None")}
 
-      <div style="margin-top:10px;"><b>Warnings</b></div>
-      ${renderList(validation.warnings, "None")}
+    <div style="margin-top:10px;"><b>Warnings</b></div>
+
+${importantWarnings.length ? `
+  <div style="color:#b26a00; font-weight:bold;">Needs Review</div>
+  ${renderList(importantWarnings, "")}
+` : ""}
+
+${minorWarnings.length ? `
+  <div style="margin-top:6px;">Other</div>
+  ${renderList(minorWarnings, "")}
+` : (!importantWarnings.length ? "None" : "")}
 
       <div style="margin-top:10px;"><b>Missing / Problem Fields</b></div>
       ${renderList(missing, "None")}
