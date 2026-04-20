@@ -243,6 +243,10 @@
   <b>Review Findings</b>
   <div id="reviewFindings" class="small" style="margin-top:8px;"></div>
 </div>
+<div class="card">
+  <b>Recommended Actions</b>
+  <div id="recommendedActions" class="small" style="margin-top:8px;"></div>
+</div>
     <div class="card">
       <b>Current combined record</b>
       <div class="small" style="margin-top:6px;">
@@ -500,6 +504,64 @@ function renderReviewFindings(record, validation) {
   `;
 
   document.getElementById("reviewFindings").innerHTML = html;
+}
+
+function generateRecommendations(record, validation) {
+  const recs = [];
+
+  for (const err of validation.errors || []) {
+    if (err.includes("Missing troop data")) {
+      recs.push("Upload a troop screenshot.");
+    }
+    if (err.includes("Missing deployment capacity")) {
+      recs.push("Re-capture Governor Bonus screenshots to include military stats.");
+    }
+    if (err.includes("Missing archers health")) {
+      recs.push("Re-capture Governor Bonus screenshots to capture archer health.");
+    }
+    if (err.includes("Missing archers attack") || err.includes("Missing archers defense") || err.includes("Missing archers lethality")) {
+      recs.push("Re-capture Governor Bonus screenshots to complete archer stats.");
+    }
+    if (err.includes("Missing cavalry health") || err.includes("Missing cavalry attack") || err.includes("Missing cavalry defense") || err.includes("Missing cavalry lethality")) {
+      recs.push("Re-capture Governor Bonus screenshots to complete cavalry stats.");
+    }
+    if (err.includes("Missing infantry health") || err.includes("Missing infantry attack") || err.includes("Missing infantry defense") || err.includes("Missing infantry lethality")) {
+      recs.push("Re-capture Governor Bonus screenshots to complete infantry stats.");
+    }
+    if (err.includes("Missing player_name")) {
+      recs.push("Re-capture the identity screenshot and verify player name.");
+    }
+    if (err.includes("Missing player_id")) {
+      recs.push("Load the correct player or re-capture the identity screenshot with player ID visible.");
+    }
+  }
+
+  for (const warn of validation.warnings || []) {
+    if (warn.includes("Suspicious cavalry health")) {
+      recs.push("Verify cavalry health value. It may be an OCR mistake.");
+    }
+    if (warn.includes("Power total does not roughly match governor power breakdown")) {
+      recs.push("Review identity power and governor power screenshots for OCR mismatch.");
+    }
+    if (warn.includes("Troop total does not match troop family sum")) {
+      recs.push("Review troop counts for OCR mismatch.");
+    }
+    if (warn.includes("Power unusually low")) {
+      recs.push("Review the identity power value. It may have parsed incorrectly.");
+    }
+  }
+
+  return [...new Set(recs)];
+}
+
+function renderRecommendedActions(record, validation) {
+  const recs = generateRecommendations(record, validation);
+
+  const html = recs.length
+    ? `<ul style="margin:6px 0 0 18px; padding:0;">${recs.map(r => `<li>${r}</li>`).join("")}</ul>`
+    : `<div>None</div>`;
+
+  document.getElementById("recommendedActions").innerHTML = html;
 }
 
 function renderRecordHealth(record, validation) {
@@ -779,6 +841,7 @@ missingSummaryEl.value =
 
 renderRecordHealth(record, validation);
 renderReviewFindings(record, validation);
+renderRecommendedActions(record, validation);
 
 
   } catch (err) {
@@ -797,7 +860,7 @@ renderReviewFindings(record, validation);
     );
 
     missingSummaryEl.value = "Cannot evaluate until validation succeeds.";
-document.getElementById("reviewFindings").innerHTML = "";
+document.getElementById("reviewFindings").innerHTML = "";document.getElementById("recommendedActions").innerHTML = "";
   }
 }
 
