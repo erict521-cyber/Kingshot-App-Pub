@@ -362,6 +362,29 @@ function validateSavePayload(record) {
   };
 }
 
+function getGovernorValidationWarnings(governor) {
+  const warnings = [];
+  if (!governor) return warnings;
+
+  if (!governor.military?.deployment_capacity) {
+    warnings.push("Missing deployment capacity");
+  }
+
+  if (!governor.troop_stats?.infantry?.attack) {
+    warnings.push("Missing infantry stats");
+  }
+
+  if (!governor.troop_stats?.cavalry?.attack) {
+    warnings.push("Missing cavalry stats");
+  }
+
+  if (!governor.troop_stats?.archers?.attack) {
+    warnings.push("Missing archer stats");
+  }
+
+  return warnings;
+}
+
     function setStatus(id, msg = "", cls = "") {
       const el = document.getElementById(id);
       if (!el) return;
@@ -2005,6 +2028,8 @@ function showCombinedRecord() {
 
   document.getElementById("combinedRecord").value =
     header + JSON.stringify(record, null, 2);
+
+runValidation();
 }
 
     function buildRecord() {
@@ -2145,16 +2170,7 @@ if (t.total && familySum !== t.total) {
   if (record.troops?.review_flags?.length) {
     warnings.push(...record.troops.review_flags);
   }
-
-  if (record.governor?.review_flags?.length) {
-    warnings.push(...record.governor.review_flags);
-  }
-
-  return {
-    is_valid: errors.length === 0,
-    errors,
-    warnings
-  };
+ warnings.push(...getGovernorValidationWarnings(record.governor));
 }
 
     function saveCurrentRecord() {
