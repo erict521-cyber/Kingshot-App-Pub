@@ -2107,26 +2107,27 @@ function validatePlayerRecord(record) {
     warnings.push("Invalid kills value");
   }
 
-const totalPower = record.identity?.power?.value || 0;
+  // --- Power consistency check (clean version) ---
+  const totalPower = record.identity?.power?.value || 0;
 
-const gp = record.governor?.power || {};
-const breakdownParts = [
-  gp.troops,
-  gp.building,
-  gp.tech,
-  gp.gear,
-  gp.hero,
-  gp.pet
-].filter(v => typeof v === "number" && !isNaN(v));
+  const gp = record.governor?.power || {};
+  const breakdownParts = [
+    gp.troops,
+    gp.building,
+    gp.tech,
+    gp.gear,
+    gp.hero,
+    gp.pet
+  ].filter(v => typeof v === "number" && !isNaN(v));
 
-if (totalPower > 0 && breakdownParts.length >= 4) {
-  const breakdownSum = breakdownParts.reduce((a, b) => a + b, 0);
-  const diffRatio = Math.abs(breakdownSum - totalPower) / totalPower;
+  if (totalPower > 0 && breakdownParts.length >= 4) {
+    const breakdownSum = breakdownParts.reduce((a, b) => a + b, 0);
+    const diffRatio = Math.abs(breakdownSum - totalPower) / totalPower;
 
-  if (diffRatio > 0.15) {
-    warnings.push("Power total does not roughly match governor power breakdown");
+    if (diffRatio > 0.15) {
+      warnings.push("Power total does not roughly match governor power breakdown");
+    }
   }
-}
 
   // --- Merge existing review flags ---
   if (record.identity?.review_flags?.length) {
