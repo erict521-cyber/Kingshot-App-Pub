@@ -239,6 +239,10 @@
   <b>Record Health</b>
   <div id="recordHealth" class="small" style="margin-top:8px;"></div>
 </div>
+<div class="card">
+  <b>Review Findings</b>
+  <div id="reviewFindings" class="small" style="margin-top:8px;"></div>
+</div>
     <div class="card">
       <b>Current combined record</b>
       <div class="small" style="margin-top:6px;">
@@ -394,6 +398,34 @@ function getSectionStatus(section, type) {
   }
 
   return "Missing";
+}
+
+function renderReviewFindings(record, validation) {
+  const missing = generateMissingSummary(record);
+
+  function renderList(items, emptyText) {
+    if (!items || !items.length) {
+      return `<div>${emptyText}</div>`;
+    }
+    return `<ul style="margin:6px 0 0 18px; padding:0;">${
+      items.map(item => `<li>${item}</li>`).join("")
+    }</ul>`;
+  }
+
+  const html = `
+    <div>
+      <div><b>Errors</b></div>
+      ${renderList(validation.errors, "None")}
+
+      <div style="margin-top:10px;"><b>Warnings</b></div>
+      ${renderList(validation.warnings, "None")}
+
+      <div style="margin-top:10px;"><b>Missing / Problem Fields</b></div>
+      ${renderList(missing, "None")}
+    </div>
+  `;
+
+  document.getElementById("reviewFindings").innerHTML = html;
 }
 
 function renderRecordHealth(record, validation) {
@@ -660,10 +692,12 @@ function runValidation() {
     }
 
     const missing = generateMissingSummary(record);
-    missingSummaryEl.value =
-      missing.length ? missing.join("\n") : "No missing critical fields.";
+missingSummaryEl.value =
+  missing.length ? missing.join("\n") : "No missing critical fields.";
 
 renderRecordHealth(record, validation);
+renderReviewFindings(record, validation);
+
 
   } catch (err) {
     console.error("runValidation failed", err);
@@ -681,6 +715,7 @@ renderRecordHealth(record, validation);
     );
 
     missingSummaryEl.value = "Cannot evaluate until validation succeeds.";
+document.getElementById("reviewFindings").innerHTML = "";
   }
 }
 
