@@ -662,6 +662,9 @@ function runValidation() {
     const missing = generateMissingSummary(record);
     missingSummaryEl.value =
       missing.length ? missing.join("\n") : "No missing critical fields.";
+
+renderRecordHealth(record, validation);
+
   } catch (err) {
     console.error("runValidation failed", err);
 
@@ -679,7 +682,6 @@ function runValidation() {
 
     missingSummaryEl.value = "Cannot evaluate until validation succeeds.";
   }
-renderRecordHealth(record, validation);
 }
 
 function updatePlayerSummaryFromRecords(playerRecord) {
