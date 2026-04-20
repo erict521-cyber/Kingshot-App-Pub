@@ -2266,21 +2266,28 @@ function validatePlayerRecord(record) {
   }
 
   // --- Existing review flags ---
-  if (record.identity?.review_flags?.length) {
-    warnings.push(...record.identity.review_flags);
-  }
+if (record.identity?.review_flags?.length) {
+  warnings.push(...record.identity.review_flags);
+}
 
-  if (record.troops?.review_flags?.length) {
-    warnings.push(...record.troops.review_flags);
-  }
+if (record.troops?.review_flags?.length) {
+  warnings.push(...record.troops.review_flags);
+}
 
-  warnings.push(...getGovernorValidationWarnings(record.governor));
+if (record.governor?.review_flags?.length) {
+  warnings.push(...record.governor.review_flags);
+}
 
-  return {
-    is_valid: errors.length === 0,
-    errors,
-    warnings
-  };
+warnings.push(...getGovernorValidationWarnings(record.governor));
+
+// Remove duplicate warning strings
+const uniqueWarnings = [...new Set(warnings)];
+
+return {
+  is_valid: errors.length === 0,
+  errors,
+  warnings: uniqueWarnings
+};
 }
 
     function saveCurrentRecord() {
