@@ -2406,10 +2406,16 @@ if (record.troops && dirtyTroops) {
 }
 
 if (record.governor && dirtyGovernor) {
-  playerRecord.governor = mergePreferExisting(
+  const mergedGovernor = mergePreferExisting(
     playerRecord.governor || {},
     record.governor
   );
+
+  // review_flags should come from the newest parsed governor payload,
+  // not from older merged data
+  mergedGovernor.review_flags = record.governor.review_flags || [];
+
+  playerRecord.governor = mergedGovernor;
   playerRecord.governor.saved_at = nowIso();
 }
 
