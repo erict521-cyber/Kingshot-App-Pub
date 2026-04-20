@@ -235,7 +235,10 @@
   <label for="govOCR">Governor OCR text</label>
   <textarea id="govOCR" placeholder="Merged governor OCR text will appear here."></textarea>
 </div>
-
+<div class="card">
+  <b>Record Health</b>
+  <div id="recordHealth" class="small" style="margin-top:8px;"></div>
+</div>
     <div class="card">
       <b>Current combined record</b>
       <div class="small" style="margin-top:6px;">
@@ -361,6 +364,60 @@ function validateSavePayload(record) {
     errors,
     warnings
   };
+}
+
+function getSectionStatus(section, type) {
+  if (!section) return "Missing";
+
+  if (type === "identity") {
+    if (!section.player_name?.value) return "Partial";
+    if (!section.power?.value) return "Partial";
+    return "Ready";
+  }
+
+  if (type === "troops") {
+    if (!section.troop_totals?.total) return "Partial";
+    return "Ready";
+  }
+
+  if (type === "governor") {
+    const hasDeployment = section.military?.deployment_capacity;
+    const stats = section.troop_stats || {};
+
+    const hasStats =
+      stats.infantry?.attack ||
+      stats.cavalry?.attack ||
+      stats.archers?.attack;
+
+    if (!hasDeployment || !hasStats) return "Partial";
+    return "Ready";
+  }
+
+  return "Missing";
+}
+
+function renderRecordHealth(record, validation) {
+  const identityStatus = getSectionStatus(record.identity, "identity");
+  const troopStatus = getSectionStatus(record.troops, "troops");
+  const governorStatus = getSectionStatus(record.governor, "governor");
+
+  let overall = "Ready";
+  if (!validation.is_valid) overall = "Incomplete";
+  else if (validation.warnings.length) overall = "Needs review";
+
+  const html = `
+    <div>
+      <div><b>Identity:</b> ${identityStatus}</div>
+      <div><b>Troops:</b> ${troopStatus}</div>
+      <div><b>Governor:</b> ${governorStatus}</div>
+      <hr style="margin:6px 0;">
+      <div><b>Overall:</b> ${overall}</div>
+      <div><b>Errors:</b> ${validation.errors.length}</div>
+      <div><b>Warnings:</b> ${validation.warnings.length}</div>
+    </div>
+  `;
+
+  document.getElementById("recordHealth").innerHTML = html;
 }
 
 function getGovernorValidationWarnings(governor) {
@@ -622,6 +679,7 @@ function runValidation() {
 
     missingSummaryEl.value = "Cannot evaluate until validation succeeds.";
   }
+renderRecordHealth(record, validation);
 }
 
 function updatePlayerSummaryFromRecords(playerRecord) {
