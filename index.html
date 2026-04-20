@@ -2138,14 +2138,15 @@ function validatePlayerRecord(record) {
     ) {
       errors.push("No troop types detected");
     }
-const familySum =
-  (t.infantry || 0) +
-  (t.cavalry || 0) +
-  (t.archers || 0);
 
-if (t.total && familySum !== t.total) {
-  warnings.push("Troop total does not match troop family sum");
-}
+    const familySum =
+      (t.infantry || 0) +
+      (t.cavalry || 0) +
+      (t.archers || 0);
+
+    if (t.total && familySum !== t.total) {
+      warnings.push("Troop total does not match troop family sum");
+    }
   }
 
   // --- Governor checks ---
@@ -2157,7 +2158,6 @@ if (t.total && familySum !== t.total) {
     }
 
     const stats = record.governor.troop_stats || {};
-
     const hasAnyStat =
       stats.infantry?.attack ||
       stats.cavalry?.attack ||
@@ -2183,7 +2183,7 @@ if (t.total && familySum !== t.total) {
     warnings.push("Invalid kills value");
   }
 
-  // --- Power consistency check (clean version) ---
+  // --- Power consistency check ---
   const totalPower = record.identity?.power?.value || 0;
 
   const gp = record.governor?.power || {};
@@ -2205,7 +2205,7 @@ if (t.total && familySum !== t.total) {
     }
   }
 
-  // --- Merge existing review flags ---
+  // --- Existing review flags ---
   if (record.identity?.review_flags?.length) {
     warnings.push(...record.identity.review_flags);
   }
@@ -2213,7 +2213,14 @@ if (t.total && familySum !== t.total) {
   if (record.troops?.review_flags?.length) {
     warnings.push(...record.troops.review_flags);
   }
- warnings.push(...getGovernorValidationWarnings(record.governor));
+
+  warnings.push(...getGovernorValidationWarnings(record.governor));
+
+  return {
+    is_valid: errors.length === 0,
+    errors,
+    warnings
+  };
 }
 
     function saveCurrentRecord() {
