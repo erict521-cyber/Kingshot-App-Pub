@@ -291,6 +291,38 @@
     let currentTroops = null;
 let currentGovernor = null;
 
+function isPlainObject(value) {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
+function mergePreferExisting(existing, incoming) {
+  if (!isPlainObject(existing) || !isPlainObject(incoming)) {
+    return incoming ?? existing;
+  }
+
+  const result = { ...existing };
+
+  for (const key of Object.keys(incoming)) {
+    const oldVal = existing[key];
+    const newVal = incoming[key];
+
+    if (isPlainObject(oldVal) && isPlainObject(newVal)) {
+      result[key] = mergePreferExisting(oldVal, newVal);
+    } else if (
+      oldVal === undefined ||
+      oldVal === null ||
+      oldVal === "" ||
+      (isPlainObject(oldVal) && Object.keys(oldVal).length === 0)
+    ) {
+      result[key] = newVal;
+    } else {
+      result[key] = oldVal;
+    }
+  }
+
+  return result;
+}
+
 function validateSavePayload(record) {
   const errors = [];
   const warnings = [];
@@ -2096,7 +2128,10 @@ if (record.troops) {
 }
 
 if (record.governor) {
-  playerRecord.governor = record.governor;
+  playerRecord.governor = mergePreferExisting(
+    playerRecord.governor || {},
+    record.governor
+  );
   playerRecord.governor.saved_at = nowIso();
 }
 
