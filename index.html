@@ -290,6 +290,7 @@
     let currentIdentity = null;
     let currentTroops = null;
 let currentGovernor = null;
+let hasUnsavedParse = false;
 
 function isPlainObject(value) {
   return value !== null && typeof value === "object" && !Array.isArray(value);
@@ -1817,6 +1818,7 @@ const statsCanvas = cropCanvas(img, 0.33, 0.70, 0.56, 0.23);
     document.getElementById("identityOCR").value = combined;
 
     currentIdentity = parseIdentityTextV2(nameText, statsText);
+hasUnsavedParse = true;
     document.getElementById("identityParsed").value = JSON.stringify(currentIdentity, null, 2);
     showCombinedRecord();
 
@@ -1867,6 +1869,7 @@ const statsCanvas = cropCanvas(img, 0.33, 0.70, 0.56, 0.23);
     document.getElementById("troopOCR").value = combined;
 
     currentTroops = parseTroopColumns(leftText, rightText);
+hasUnsavedParse = true;
     document.getElementById("troopParsed").value = JSON.stringify(currentTroops, null, 2);
     showCombinedRecord();
 
@@ -1904,6 +1907,7 @@ async function readGovernor() {
     document.getElementById("govOCR").value = mergedText;
 
     currentGovernor = parseGovernorText(mergedText);
+hasUnsavedParse = true;
     document.getElementById("govParsed").value = JSON.stringify(currentGovernor, null, 2);
     showCombinedRecord();
 
@@ -1968,6 +1972,11 @@ function buildCombinedRecord() {
     }
 
     function clearCurrentParse() {
+if (hasUnsavedParse) {
+  const proceed = confirm("You have unsaved parsed data. Loading a player will overwrite it. Continue?");
+  if (!proceed) return;
+}
+
   currentIdentity = null;
   currentTroops = null;
   currentGovernor = null;
@@ -2133,6 +2142,7 @@ if (record.governor) {
     record.governor
   );
   playerRecord.governor.saved_at = nowIso();
+
 }
 
   updatePlayerSummaryFromRecords(playerRecord);
@@ -2154,6 +2164,7 @@ if (record.governor) {
   } else {
     setStatus("saveStatus", `Saved player ${record.player_id}.`, "ok");
   }
+hasUnsavedParse = false;
 }
 
     function refreshPlayerList(selectedId = "") {
@@ -2186,6 +2197,11 @@ if (record.governor) {
     }
 
     function loadSelectedPlayer() {
+if (hasUnsavedParse) {
+  const proceed = confirm("You have unsaved parsed data. Loading a player will overwrite it. Continue?");
+  if (!proceed) return;
+}
+
   const id = document.getElementById("playerSelect").value;
   const db = getDb();
   const rec = db.players[id];
