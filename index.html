@@ -450,19 +450,19 @@ function rebuildFromCurrent() {
 function generateMissingSummary(record) {
   const missing = [];
 
-  if (!record.player_id) missing.push("player_id");
+  if (!record?.player_id) missing.push("player_id");
 
-  if (!record.identity?.player_name?.value) missing.push("identity.player_name");
-  if (!record.identity?.power?.value) missing.push("identity.power");
-  if (record.identity?.kills?.value == null) missing.push("identity.kills");
+  if (!record?.identity?.player_name?.value) missing.push("identity.player_name");
+  if (!record?.identity?.power?.value) missing.push("identity.power");
+  if (record?.identity?.kills?.value == null) missing.push("identity.kills");
 
-  if (!record.troops?.troop_totals?.total) missing.push("troops.total");
+  if (!record?.troops?.troop_totals?.total) missing.push("troops.total");
 
-  if (!record.governor?.military?.deployment_capacity) {
+  if (!record?.governor?.military?.deployment_capacity) {
     missing.push("governor.deployment_capacity");
   }
 
-  const stats = record.governor?.troop_stats || {};
+  const stats = record?.governor?.troop_stats || {};
   if (
     !stats.infantry?.attack &&
     !stats.cavalry?.attack &&
@@ -577,51 +577,51 @@ function ensurePlayerRecord(db, playerId) {
 }
 
 function runValidation() {
-  let record;
+  const validationOutputEl = document.getElementById("validationOutput");
+  const missingSummaryEl = document.getElementById("missingSummary");
 
   try {
-    record = buildCombinedRecord();
-  } catch (err) {
-    console.error("Validation build failed", err);
-    setStatus("validationStatus", "Validation failed: invalid combined JSON", "warn");
-    document.getElementById("validationOutput").value =
-      JSON.stringify(
-        {
-          is_valid: false,
-          errors: ["Invalid combined JSON"],
-          warnings: []
-        },
-        null,
-        2
+    const record = buildCombinedRecord();
+    const validation = validatePlayerRecord(record);
+
+    validationOutputEl.value = JSON.stringify(validation, null, 2);
+
+    if (!validation.is_valid) {
+      setStatus(
+        "validationStatus",
+        `Invalid: ${validation.errors.join("; ")}`,
+        "warn"
       );
-    document.getElementById("missingSummary").value = "Cannot evaluate until JSON is valid.";
-    return;
-  }
+    } else if (validation.warnings.length) {
+      setStatus(
+        "validationStatus",
+        `Valid with warnings: ${validation.warnings.join("; ")}`,
+        "warn"
+      );
+    } else {
+      setStatus("validationStatus", "Valid record.", "ok");
+    }
 
-  const validation = validatePlayerRecord(record);
+    const missing = generateMissingSummary(record);
+    missingSummaryEl.value =
+      missing.length ? missing.join("\n") : "No missing critical fields.";
+  } catch (err) {
+    console.error("runValidation failed", err);
 
-  document.getElementById("validationOutput").value =
-    JSON.stringify(validation, null, 2);
+    setStatus("validationStatus", "Validation failed.", "warn");
 
-  if (!validation.is_valid) {
-    setStatus(
-      "validationStatus",
-      `Invalid: ${validation.errors.join("; ")}`,
-      "warn"
+    validationOutputEl.value = JSON.stringify(
+      {
+        is_valid: false,
+        errors: ["Validation runtime failure"],
+        warnings: [String(err.message || err)]
+      },
+      null,
+      2
     );
-  } else if (validation.warnings.length) {
-    setStatus(
-      "validationStatus",
-      `Valid with warnings: ${validation.warnings.join("; ")}`,
-      "warn"
-    );
-  } else {
-    setStatus("validationStatus", "Valid record.", "ok");
-  }
 
-  const missing = generateMissingSummary(record);
-  document.getElementById("missingSummary").value =
-    missing.length ? missing.join("\n") : "No missing critical fields.";
+    missingSummaryEl.value = "Cannot evaluate until validation succeeds.";
+  }
 }
 
 function updatePlayerSummaryFromRecords(playerRecord) {
@@ -1868,17 +1868,24 @@ const statsCanvas = cropCanvas(img, 0.33, 0.70, 0.56, 0.23);
     currentIdentity = parseIdentityTextV2(nameText, statsText);
 dirtyIdentity = true;
 hasUnsavedParse = true;
- document.getElementById("identityParsed").value = JSON.stringify(currentIdentity, null, 2);
-    showCombinedRecord();
 
-    const flags = currentIdentity.review_flags || [];
-    setStatus(
-      "identityStatus",
-      flags.length
-        ? `Identity parsed with warnings: ${flags.join("; ")}`
-        : "Identity parsed successfully.",
-      flags.length ? "warn" : "ok"
-    );
+document.getElementById("identityParsed").value = JSON.stringify(currentIdentity, null, 2);
+
+const flags = currentIdentity.review_flags || [];
+setStatus(
+  "identityStatus",
+  flags.length
+    ? `Identity parsed with warnings: ${flags.join("; ")}`
+    : "Identity parsed successfully.",
+  flags.length ? "warn" : "ok"
+);
+
+try {
+  showCombinedRecord();
+} catch (uiErr) {
+  console.error("showCombinedRecord failed after identity parse", uiErr);
+  setStatus("identityStatus", "Identity parsed, but combined record refresh failed.", "warn");
+}
   } catch (err) {
     console.error(err);
     setStatus("identityStatus", "Identity OCR failed.", "warn");
@@ -1920,17 +1927,24 @@ hasUnsavedParse = true;
     currentTroops = parseTroopColumns(leftText, rightText);
 dirtyTroops = true;
 hasUnsavedParse = true;
-    document.getElementById("troopParsed").value = JSON.stringify(currentTroops, null, 2);
-    showCombinedRecord();
 
-    const flags = currentTroops.review_flags || [];
-    setStatus(
-      "troopStatus",
-      flags.length
-        ? `Troops parsed with warnings: ${flags.join("; ")}`
-        : "Troops parsed successfully.",
-      flags.length ? "warn" : "ok"
-    );
+document.getElementById("troopParsed").value = JSON.stringify(currentTroops, null, 2);
+
+const flags = currentTroops.review_flags || [];
+setStatus(
+  "troopStatus",
+  flags.length
+    ? `Troops parsed with warnings: ${flags.join("; ")}`
+    : "Troops parsed successfully.",
+  flags.length ? "warn" : "ok"
+);
+
+try {
+  showCombinedRecord();
+} catch (uiErr) {
+  console.error("showCombinedRecord failed after troop parse", uiErr);
+  setStatus("troopStatus", "Troops parsed, but combined record refresh failed.", "warn");
+}
   } catch (err) {
     console.error(err);
     setStatus("troopStatus", "Troop OCR failed.", "warn");
@@ -1959,17 +1973,24 @@ async function readGovernor() {
     currentGovernor = parseGovernorText(mergedText);
 dirtyGovernor = true;
 hasUnsavedParse = true;
-  document.getElementById("govParsed").value = JSON.stringify(currentGovernor, null, 2);
-    showCombinedRecord();
 
-    const flags = currentGovernor.review_flags || [];
-    setStatus(
-      "govStatus",
-      flags.length
-        ? `Governor parsed with warnings: ${flags.join("; ")}`
-        : "Governor parsed successfully.",
-      flags.length ? "warn" : "ok"
-    );
+document.getElementById("govParsed").value = JSON.stringify(currentGovernor, null, 2);
+
+const flags = currentGovernor.review_flags || [];
+setStatus(
+  "govStatus",
+  flags.length
+    ? `Governor parsed with warnings: ${flags.join("; ")}`
+    : "Governor parsed successfully.",
+  flags.length ? "warn" : "ok"
+);
+
+try {
+  showCombinedRecord();
+} catch (uiErr) {
+  console.error("showCombinedRecord failed after governor parse", uiErr);
+  setStatus("govStatus", "Governor parsed, but combined record refresh failed.", "warn");
+}
   } catch (err) {
     console.error(err);
     setStatus("govStatus", "Governor OCR failed.", "warn");
@@ -2042,8 +2063,11 @@ function showCombinedRecord() {
     ? "unsaved parse"
     : ageLabel(savedPlayer?.governor?.saved_at);
 
-  document.getElementById("freshnessStatus").textContent =
-    `Identity: ${identityFreshness} | Troops: ${troopsFreshness} | Governor: ${governorFreshness}`;
+  const freshnessEl = document.getElementById("freshnessStatus");
+  if (freshnessEl) {
+    freshnessEl.textContent =
+      `Identity: ${identityFreshness} | Troops: ${troopsFreshness} | Governor: ${governorFreshness}`;
+  }
 
   document.getElementById("combinedRecord").value =
     JSON.stringify(record, null, 2);
