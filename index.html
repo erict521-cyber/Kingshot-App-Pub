@@ -401,12 +401,16 @@ function getSectionStatus(section, type) {
 }
 
 function renderReviewFindings(record, validation) {
+const errorSet = new Set(validation.errors || []);
+
 const importantWarnings = (validation.warnings || []).filter(w =>
-  w.toLowerCase().includes("suspicious") ||
-  w.toLowerCase().includes("mismatch")
+  !errorSet.has(w) &&
+  (w.toLowerCase().includes("suspicious") ||
+   w.toLowerCase().includes("mismatch"))
 );
 
 const minorWarnings = (validation.warnings || []).filter(w =>
+  !errorSet.has(w) &&
   !importantWarnings.includes(w)
 );
   const missing = generateMissingSummary(record);
