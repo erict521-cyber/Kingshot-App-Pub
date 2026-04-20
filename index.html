@@ -291,6 +291,9 @@
     let currentTroops = null;
 let currentGovernor = null;
 let hasUnsavedParse = false;
+let dirtyIdentity = false;
+let dirtyTroops = false;
+let dirtyGovernor = false;
 
 function isPlainObject(value) {
   return value !== null && typeof value === "object" && !Array.isArray(value);
@@ -1818,8 +1821,9 @@ const statsCanvas = cropCanvas(img, 0.33, 0.70, 0.56, 0.23);
     document.getElementById("identityOCR").value = combined;
 
     currentIdentity = parseIdentityTextV2(nameText, statsText);
+dirtyIdentity = true;
 hasUnsavedParse = true;
-    document.getElementById("identityParsed").value = JSON.stringify(currentIdentity, null, 2);
+ document.getElementById("identityParsed").value = JSON.stringify(currentIdentity, null, 2);
     showCombinedRecord();
 
     const flags = currentIdentity.review_flags || [];
@@ -1869,6 +1873,7 @@ hasUnsavedParse = true;
     document.getElementById("troopOCR").value = combined;
 
     currentTroops = parseTroopColumns(leftText, rightText);
+dirtyTroops = true;
 hasUnsavedParse = true;
     document.getElementById("troopParsed").value = JSON.stringify(currentTroops, null, 2);
     showCombinedRecord();
@@ -1907,8 +1912,9 @@ async function readGovernor() {
     document.getElementById("govOCR").value = mergedText;
 
     currentGovernor = parseGovernorText(mergedText);
+dirtyGovernor = true;
 hasUnsavedParse = true;
-    document.getElementById("govParsed").value = JSON.stringify(currentGovernor, null, 2);
+  document.getElementById("govParsed").value = JSON.stringify(currentGovernor, null, 2);
     showCombinedRecord();
 
     const flags = currentGovernor.review_flags || [];
@@ -2012,6 +2018,10 @@ if (hasUnsavedParse) {
   currentIdentity = null;
   currentTroops = null;
   currentGovernor = null;
+dirtyIdentity = false;
+dirtyTroops = false;
+dirtyGovernor = false;
+hasUnsavedParse = false;
 
   document.getElementById("identityParsed").value = "";
   document.getElementById("identityOCR").value = "";
@@ -2158,23 +2168,23 @@ if (!record.player_id) {
   const playerRecord = ensurePlayerRecord(db, record.player_id);
 
   playerRecord.player_id = record.player_id;
-  if (record.identity) {
+
+  if (record.identity && dirtyIdentity) {
   playerRecord.identity = record.identity;
   playerRecord.identity.saved_at = nowIso();
 }
 
-if (record.troops) {
+if (record.troops && dirtyTroops) {
   playerRecord.troops = record.troops;
   playerRecord.troops.saved_at = nowIso();
 }
 
-if (record.governor) {
+if (record.governor && dirtyGovernor) {
   playerRecord.governor = mergePreferExisting(
     playerRecord.governor || {},
     record.governor
   );
   playerRecord.governor.saved_at = nowIso();
-
 }
 
   updatePlayerSummaryFromRecords(playerRecord);
@@ -2196,6 +2206,9 @@ if (record.governor) {
   } else {
     setStatus("saveStatus", `Saved player ${record.player_id}.`, "ok");
   }
+dirtyIdentity = false;
+dirtyTroops = false;
+dirtyGovernor = false;
 hasUnsavedParse = false;
 }
 
@@ -2246,6 +2259,10 @@ if (hasUnsavedParse) {
   currentIdentity = rec.identity || null;
   currentTroops = rec.troops || null;
   currentGovernor = rec.governor || null;
+dirtyIdentity = false;
+dirtyTroops = false;
+dirtyGovernor = false;
+hasUnsavedParse = false;
 
   document.getElementById("identityParsed").value = currentIdentity ? JSON.stringify(currentIdentity, null, 2) : "";
   document.getElementById("troopParsed").value = currentTroops ? JSON.stringify(currentTroops, null, 2) : "";
