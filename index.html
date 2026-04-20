@@ -401,28 +401,27 @@ function getSectionStatus(section, type) {
 }
 
 function renderReviewFindings(record, validation) {
-const errorSet = new Set(validation.errors || []);
+  const missing = generateMissingSummary(record);
+  const errorSet = new Set(validation.errors || []);
 
-const importantWarnings = (validation.warnings || []).filter(w =>
-  !errorSet.has(w) &&
-  (w.toLowerCase().includes("suspicious") ||
-   w.toLowerCase().includes("mismatch"))
-);
+  const importantWarnings = (validation.warnings || []).filter(w =>
+    !errorSet.has(w) &&
+    (
+      w.toLowerCase().includes("suspicious") ||
+      w.toLowerCase().includes("mismatch")
+    )
+  );
 
-const minorWarnings = (validation.warnings || []).filter(w =>
-  !errorSet.has(w) &&
-  !importantWarnings.includes(w)
-);
-  const missingFields = computeMissingFields(record).filter(field =>
-  !(validation.errors || []).some(e =>
-    e.toLowerCase().includes(field.split('.').pop())
-  )
-);
+  const minorWarnings = (validation.warnings || []).filter(w =>
+    !errorSet.has(w) &&
+    !importantWarnings.includes(w)
+  );
 
   function renderList(items, emptyText) {
     if (!items || !items.length) {
       return `<div>${emptyText}</div>`;
     }
+
     return `<ul style="margin:6px 0 0 18px; padding:0;">${
       items.map(item => `<li>${item}</li>`).join("")
     }</ul>`;
@@ -433,17 +432,25 @@ const minorWarnings = (validation.warnings || []).filter(w =>
       <div><b>Errors</b></div>
       ${renderList(validation.errors, "None")}
 
-    <div style="margin-top:10px;"><b>Warnings</b></div>
+      <div style="margin-top:10px;"><b>Warnings</b></div>
 
-${importantWarnings.length ? `
-  <div style="color:#b26a00; font-weight:bold;">Needs Review</div>
-  ${renderList(importantWarnings, "")}
-` : ""}
+      ${
+        importantWarnings.length
+          ? `
+            <div style="color:#b26a00; font-weight:bold;">Needs Review</div>
+            ${renderList(importantWarnings, "")}
+          `
+          : ""
+      }
 
-${minorWarnings.length ? `
-  <div style="margin-top:6px;">Other</div>
-  ${renderList(minorWarnings, "")}
-` : (!importantWarnings.length ? "None" : "")}
+      ${
+        minorWarnings.length
+          ? `
+            <div style="margin-top:6px;">Other</div>
+            ${renderList(minorWarnings, "")}
+          `
+          : (!importantWarnings.length ? `<div>None</div>` : "")
+      }
 
       <div style="margin-top:10px;"><b>Missing / Problem Fields</b></div>
       ${renderList(missing, "None")}
