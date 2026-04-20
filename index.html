@@ -247,6 +247,7 @@
 <button onclick="rebuildFromCurrent()">Rebuild from OCR</button>
       </div>
       <div id="saveStatus" class="status"></div>
+<div id="freshnessStatus" class="status"></div>
       <textarea id="combinedRecord" placeholder="Combined record will appear here."></textarea>
     </div>
  <button onclick="buildRecord()">Build Record</button>
@@ -453,7 +454,7 @@ function generateMissingSummary(record) {
 
   if (!record.identity?.player_name?.value) missing.push("identity.player_name");
   if (!record.identity?.power?.value) missing.push("identity.power");
-  if (!record.identity?.kills?.value) missing.push("identity.kills");
+  if (record.identity?.kills?.value == null) missing.push("identity.kills");
 
   if (!record.troops?.troop_totals?.total) missing.push("troops.total");
 
@@ -576,7 +577,27 @@ function ensurePlayerRecord(db, playerId) {
 }
 
 function runValidation() {
-  const record = buildCombinedRecord();
+  let record;
+
+  try {
+    record = buildCombinedRecord();
+  } catch (err) {
+    console.error("Validation build failed", err);
+    setStatus("validationStatus", "Validation failed: invalid combined JSON", "warn");
+    document.getElementById("validationOutput").value =
+      JSON.stringify(
+        {
+          is_valid: false,
+          errors: ["Invalid combined JSON"],
+          warnings: []
+        },
+        null,
+        2
+      );
+    document.getElementById("missingSummary").value = "Cannot evaluate until JSON is valid.";
+    return;
+  }
+
   const validation = validatePlayerRecord(record);
 
   document.getElementById("validationOutput").value =
@@ -597,9 +618,10 @@ function runValidation() {
   } else {
     setStatus("validationStatus", "Valid record.", "ok");
   }
-const missing = generateMissingSummary(record);
-document.getElementById("missingSummary").value =
-  missing.length ? missing.join("\n") : "No missing critical fields.";
+
+  const missing = generateMissingSummary(record);
+  document.getElementById("missingSummary").value =
+    missing.length ? missing.join("\n") : "No missing critical fields.";
 }
 
 function updatePlayerSummaryFromRecords(playerRecord) {
@@ -2020,16 +2042,13 @@ function showCombinedRecord() {
     ? "unsaved parse"
     : ageLabel(savedPlayer?.governor?.saved_at);
 
-  const header =
-    `=== DATA FRESHNESS ===\n` +
-    `Identity: ${identityFreshness}\n` +
-    `Troops: ${troopsFreshness}\n` +
-    `Governor: ${governorFreshness}\n\n`;
+  document.getElementById("freshnessStatus").textContent =
+    `Identity: ${identityFreshness} | Troops: ${troopsFreshness} | Governor: ${governorFreshness}`;
 
   document.getElementById("combinedRecord").value =
-    header + JSON.stringify(record, null, 2);
+    JSON.stringify(record, null, 2);
 
-runValidation();
+  runValidation();
 }
 
     function buildRecord() {
