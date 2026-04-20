@@ -2213,6 +2213,11 @@ dirtyIdentity = false;
 dirtyTroops = false;
 dirtyGovernor = false;
 hasUnsavedParse = false;
+currentIdentity = playerRecord.identity || null;
+currentTroops = playerRecord.troops || null;
+currentGovernor = playerRecord.governor || null;
+
+showCombinedRecord();
 }
 
     function refreshPlayerList(selectedId = "") {
