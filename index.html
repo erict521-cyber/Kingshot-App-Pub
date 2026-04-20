@@ -1959,27 +1959,40 @@ function buildCombinedRecord() {
 }
 
 function showCombinedRecord() {
-  const record = buildCombinedRecord();
+  const record = buildCombinedRecordFromCurrentState();
+  const db = getDb();
+  const savedPlayer = record.player_id ? db.players[record.player_id] : null;
 
-  function ageLabel(ts) {
+  function freshnessLabel(currentSection, savedSection) {
+    if (currentSection && !currentSection.saved_at) {
+      return "unsaved parse";
+    }
+
+    const ts = currentSection?.saved_at || savedSection?.saved_at;
     if (!ts) return "missing";
+
     const diff = Date.now() - new Date(ts).getTime();
     const min = Math.floor(diff / 60000);
+
     if (min < 1) return "just now";
     if (min < 60) return `${min}m ago`;
+
     const hr = Math.floor(min / 60);
-    return `${hr}h ago`;
+    if (hr < 24) return `${hr}h ago`;
+
+    const day = Math.floor(hr / 24);
+    return `${day}d ago`;
   }
 
-  const identityAge = ageLabel(record.identity?.saved_at);
-  const troopsAge = ageLabel(record.troops?.saved_at);
-  const governorAge = ageLabel(record.governor?.saved_at);
+  const identityFreshness = freshnessLabel(record.identity, savedPlayer?.identity);
+  const troopsFreshness = freshnessLabel(record.troops, savedPlayer?.troops);
+  const governorFreshness = freshnessLabel(record.governor, savedPlayer?.governor);
 
   const header =
     `=== DATA FRESHNESS ===\n` +
-    `Identity: ${identityAge}\n` +
-    `Troops: ${troopsAge}\n` +
-    `Governor: ${governorAge}\n\n`;
+    `Identity: ${identityFreshness}\n` +
+    `Troops: ${troopsFreshness}\n` +
+    `Governor: ${governorFreshness}\n\n`;
 
   document.getElementById("combinedRecord").value =
     header + JSON.stringify(record, null, 2);
