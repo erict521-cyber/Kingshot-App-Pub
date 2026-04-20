@@ -307,6 +307,48 @@ function isPlainObject(value) {
   return value !== null && typeof value === "object" && !Array.isArray(value);
 }
 
+function buildReviewRecord() {
+  const current = buildCombinedRecordFromCurrentState();
+  const db = getDb();
+
+  if (!current.player_id) {
+    return current;
+  }
+
+  const savedPlayer = db.players[current.player_id];
+  if (!savedPlayer) {
+    return current;
+  }
+
+  const reviewRecord = {
+    player_id: current.player_id,
+    identity: savedPlayer.identity || null,
+    troops: savedPlayer.troops || null,
+    governor: savedPlayer.governor || null,
+    updated_at: nowIso()
+  };
+
+  if (current.identity) {
+    reviewRecord.identity = current.identity;
+  }
+
+  if (current.troops) {
+    reviewRecord.troops = current.troops;
+  }
+
+  if (current.governor) {
+    reviewRecord.governor = mergePreferExisting(
+      savedPlayer.governor || {},
+      current.governor
+    );
+
+    // use newest parse flags only
+    reviewRecord.governor.review_flags = current.governor.review_flags || [];
+  }
+
+  return reviewRecord;
+}
+
 function mergePreferExisting(existing, incoming) {
   if (!isPlainObject(existing) || !isPlainObject(incoming)) {
     return incoming ?? existing;
@@ -710,7 +752,7 @@ function runValidation() {
   const missingSummaryEl = document.getElementById("missingSummary");
 
   try {
-    const record = buildCombinedRecord();
+    const record = buildReviewRecord();
     const validation = validatePlayerRecord(record);
 
     validationOutputEl.value = JSON.stringify(validation, null, 2);
@@ -2182,7 +2224,7 @@ function buildCombinedRecord() {
 }
 
 function showCombinedRecord() {
-  const record = buildCombinedRecordFromCurrentState();
+  const record = buildReviewRecord();
   const db = getDb();
   const savedPlayer = record.player_id ? db.players[record.player_id] : null;
 
