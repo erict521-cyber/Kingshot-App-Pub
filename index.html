@@ -413,7 +413,11 @@ const minorWarnings = (validation.warnings || []).filter(w =>
   !errorSet.has(w) &&
   !importantWarnings.includes(w)
 );
-  const missing = generateMissingSummary(record);
+  const missingFields = computeMissingFields(record).filter(field =>
+  !(validation.errors || []).some(e =>
+    e.toLowerCase().includes(field.split('.').pop())
+  )
+);
 
   function renderList(items, emptyText) {
     if (!items || !items.length) {
