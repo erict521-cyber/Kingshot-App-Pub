@@ -488,23 +488,31 @@ function getGovernorValidationWarnings(governor) {
   const warnings = [];
   if (!governor) return warnings;
 
-  if (!governor.military?.deployment_capacity) {
-    warnings.push("Missing deployment capacity");
+  const stats = governor.troop_stats || {};
+
+  function maybeFlag(label, value) {
+    if (value == null) return;
+    if (value >= 10 && value < 20) {
+      warnings.push(`Suspicious ${label}: ${value}`);
+    }
   }
 
-  if (!governor.troop_stats?.infantry?.attack) {
-    warnings.push("Missing infantry stats");
-  }
+  maybeFlag("infantry attack", stats.infantry?.attack);
+  maybeFlag("infantry defense", stats.infantry?.defense);
+  maybeFlag("infantry health", stats.infantry?.health);
+  maybeFlag("infantry lethality", stats.infantry?.lethality);
 
-  if (!governor.troop_stats?.cavalry?.attack) {
-    warnings.push("Missing cavalry stats");
-  }
+  maybeFlag("cavalry attack", stats.cavalry?.attack);
+  maybeFlag("cavalry defense", stats.cavalry?.defense);
+  maybeFlag("cavalry health", stats.cavalry?.health);
+  maybeFlag("cavalry lethality", stats.cavalry?.lethality);
 
-  if (!governor.troop_stats?.archers?.attack) {
-    warnings.push("Missing archer stats");
-  }
+  maybeFlag("archer attack", stats.archers?.attack);
+  maybeFlag("archer defense", stats.archers?.defense);
+  maybeFlag("archer health", stats.archers?.health);
+  maybeFlag("archer lethality", stats.archers?.lethality);
 
-  return warnings;
+  return [...new Set(warnings)];
 }
 
     function setStatus(id, msg = "", cls = "") {
@@ -2340,8 +2348,12 @@ function validatePlayerRecord(record) {
   }
 
   if (record.troops?.review_flags?.length) {
-    warnings.push(...record.troops.review_flags);
-  }
+  warnings.push(...record.troops.review_flags);
+}
+
+// Governor warnings should be recomputed from current merged data,
+// not reused from stored review_flags, because old flags can go stale.
+warnings.push(...getGovernorValidationWarnings(record.governor));
 
   if (record.governor?.review_flags?.length) {
     warnings.push(...record.governor.review_flags);
