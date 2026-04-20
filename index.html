@@ -1969,12 +1969,7 @@ function showCombinedRecord() {
   const db = getDb();
   const savedPlayer = record.player_id ? db.players[record.player_id] : null;
 
-  function freshnessLabel(currentSection, savedSection) {
-    if (currentSection && !currentSection.saved_at) {
-      return "unsaved parse";
-    }
-
-    const ts = currentSection?.saved_at || savedSection?.saved_at;
+  function ageLabel(ts) {
     if (!ts) return "missing";
 
     const diff = Date.now() - new Date(ts).getTime();
@@ -1990,9 +1985,17 @@ function showCombinedRecord() {
     return `${day}d ago`;
   }
 
-  const identityFreshness = freshnessLabel(record.identity, savedPlayer?.identity);
-  const troopsFreshness = freshnessLabel(record.troops, savedPlayer?.troops);
-  const governorFreshness = freshnessLabel(record.governor, savedPlayer?.governor);
+  const identityFreshness = dirtyIdentity
+    ? "unsaved parse"
+    : ageLabel(savedPlayer?.identity?.saved_at);
+
+  const troopsFreshness = dirtyTroops
+    ? "unsaved parse"
+    : ageLabel(savedPlayer?.troops?.saved_at);
+
+  const governorFreshness = dirtyGovernor
+    ? "unsaved parse"
+    : ageLabel(savedPlayer?.governor?.saved_at);
 
   const header =
     `=== DATA FRESHNESS ===\n` +
