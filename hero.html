@@ -1409,88 +1409,161 @@ function parseHeroOverviewParts(parts) {
     review_flags: []
   };
 
-  let rawName = String(nameText || "").replace(/[^A-Za-z ]/g, " ").replace(/\s+/g, " ").trim();
-  let heroMeta = null;
+  const rawNameText = String(nameText || "");
+  const rawFullText = String(fullText || "");
+  const rawRarityText = String(rarityText || "");
+  const rawSummaryRowText = String(summaryRowText || "");
+  const rawLevelText = String(levelText || "");
+  const rawPowerText = String(powerText || "");
 
-  if (rawName) {
-    const heroKey = normalizeHeroName(rawName);
-    heroMeta = HERO_LIBRARY[heroKey] || null;
+  function cleanNameCandidate(s) {
+    return String(s || "")
+      .replace(/[^A-Za-z ]/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
   }
 
-  if (!heroMeta) {
-    const fullNorm = normalizeHeroName(fullText);
+  function extractCommaNumbers(s) {
+    return (String(s || "").match(/\d{1,3}(?:,\d{3})+/g) || [])
+      .map(v => cleanInt(v))
+      .filter(v => v > 0);
+  }
+
+  function extractPlainNumbers(s) {
+    return (String(s || "").match(/\d+/g) || [])
+      .map(v => parseInt(v, 10))
+      .filter(v => !isNaN(v) && v > 0);
+  }
+
+  function findHeroMetaFromText(...texts) {
+    const joined = texts.join(" ");
+    const normalizedJoined = normalizeHeroName(joined);
+
     for (const [key, meta] of Object.entries(HERO_LIBRARY)) {
-      if (fullNorm.includes(key)) {
-        heroMeta = meta;
-        break;
+      const canonicalNorm = normalizeHeroName(meta.canonical_name);
+      if (
+        normalizedJoined.includes(key) ||
+        normalizedJoined.includes(canonicalNorm)
+      ) {
+        return meta;
       }
     }
+
+    return null;
   }
+
+  // --- Hero name / troop type / rarity ---
+  const cleanedName = cleanNameCandidate(rawNameText);
+  const heroMeta =
+    findHeroMetaFromText(cleanedName, rawFullText) || null;
 
   if (heroMeta) {
     rec.hero_name = heroMeta.canonical_name;
     rec.troop_type = heroMeta.troop_type;
     rec.rarity = heroMeta.rarity;
-  } else if (rawName.length >= 3) {
-    rec.hero_name = rawName;
+  } else if (cleanedName.length >= 3) {
+    rec.hero_name = cleanedName;
   }
 
   if (!rec.rarity) {
-    const rarityRaw = `${rarityText} ${fullText}`;
+    const rarityRaw = `${rawRarityText} ${rawFullText}`;
     if (/SSR/i.test(rarityRaw)) rec.rarity = "SSR";
     else if (/SR/i.test(rarityRaw)) rec.rarity = "SR";
     else if (/\bR\b/i.test(rarityRaw)) rec.rarity = "R";
   }
 
-  const powerMatch =
-    String(fullText || "").match(/\b\d{1,3}(?:,\d{3})+\b/) ||
-    String(powerText || "").match(/\b\d{1,3}(?:,\d{3})+\b/);
+  // --- Hero power ---
+  const powerCandidates = [
+    ...extractCommaNumbers(rawFullText),
+    ...extractCommaNumbers(rawPowerText),
+    ...extractCommaNumbers(rawSummaryRowText),
+    ...extractCommaNumbers(rawLevelText)
+  ];
 
-  if (powerMatch) {
-    rec.hero_power = cleanInt(powerMatch[0]);
+  if (powerCandidates.length) {
+    rec.hero_power = Math.max(...powerCandidates);
   }
 
-  const fullLines = String(fullText || "").split(/\n+/).map(s => s.trim()).filter(Boolean);
+  // --- Escort / Level / Capacity ---
+  // Best case: OCR preserved them in order like:
+  // 10 75 13,270
+  const fullWithNormalizedSeparators = rawFullText
+    .replace(/[®©@&]/g, " ")
+    .replace(/[^\d,\s]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
 
-  const summaryIdx = fullLines.findIndex(line =>
-    /Escorts/i.test(line) && /Level/i.test(line) && /Troops?\s*Capacity/i.test(line)
-  );
+  const tripleMatch =
+    fullWithNormalizedSeparators.match(/\b(\d{1,2})\s+(\d{1,3})\s+(\d{1,3}(?:,\d{3})+)\b/);
 
-  if (summaryIdx >= 0 && summaryIdx + 1 < fullLines.length) {
-    const nextLine = fullLines[summaryIdx + 1];
-    const nums = (nextLine.match(/\d[\d,]*/g) || []).map(cleanInt).filter(n => n > 0);
-
-    const smallNums = nums.filter(n => n < 1000);
-    const capNums = nums.filter(n => n >= 1000 && n < 100000);
-
-    if (smallNums.length) rec.escort_count = smallNums[0];
-    if (capNums.length) rec.troop_capacity = capNums[capNums.length - 1];
+  if (tripleMatch) {
+    rec.escort_count = parseInt(tripleMatch[1], 10);
+    rec.level = parseInt(tripleMatch[2], 10);
+    rec.troop_capacity = cleanInt(tripleMatch[3]);
   }
 
-  if (!rec.escort_count || !rec.troop_capacity) {
-    const summaryNums = (String(summaryRowText || "").match(/\d[\d,]*/g) || []).map(cleanInt).filter(n => n > 0 && n < 100000);
-    const smallNums = summaryNums.filter(n => n < 1000);
-    const capNums = summaryNums.filter(n => n >= 1000);
-    if (!rec.escort_count && smallNums.length) rec.escort_count = smallNums[0];
-    if (!rec.troop_capacity && capNums.length) rec.troop_capacity = capNums[capNums.length - 1];
-  }
+  // Fallback: use summary row numbers if triple wasn't found
+  if (rec.escort_count == null || rec.level == null || rec.troop_capacity == null) {
+    const summaryCommaNums = extractCommaNumbers(rawSummaryRowText);
+    const summaryPlainNums = extractPlainNumbers(rawSummaryRowText);
 
-  const levelNums = (String(levelText || "").match(/\d+/g) || [])
-    .map(v => parseInt(v, 10))
-    .filter(v => !isNaN(v) && v >= 1 && v <= 100);
+    if (rec.troop_capacity == null && summaryCommaNums.length) {
+      rec.troop_capacity = Math.max(...summaryCommaNums);
+    }
 
-  if (levelNums.length) {
-    const candidate = levelNums[0];
-    if (candidate >= 10 && candidate !== rec.escort_count) {
-      rec.level = candidate;
+    const smallNums = summaryPlainNums.filter(v => v >= 1 && v <= 100);
+    if (smallNums.length >= 2) {
+      if (rec.escort_count == null) rec.escort_count = smallNums[0];
+      if (rec.level == null) rec.level = smallNums[1];
     }
   }
 
+  // Fallback: use full OCR small numbers if still missing
+  if (rec.escort_count == null || rec.level == null) {
+    const fullPlainNums = extractPlainNumbers(rawFullText).filter(v => v >= 1 && v <= 100);
+
+    // remove pieces of large comma numbers from consideration by trusting only true 1-3 digit tokens
+    if (fullPlainNums.length >= 2) {
+      if (rec.escort_count == null) rec.escort_count = fullPlainNums[0];
+      if (rec.level == null) rec.level = fullPlainNums[1];
+    }
+  }
+
+  // Final sanity for level
+  if (rec.level != null) {
+    if (rec.level < 1 || rec.level > 100) {
+      rec.level = null;
+    }
+  }
+
+  // If level was misread from power fragments like 88 instead of 75,
+  // and we have a 3-number row in full OCR, prefer that row value.
+  if (tripleMatch) {
+    const tripleLevel = parseInt(tripleMatch[2], 10);
+    if (tripleLevel >= 1 && tripleLevel <= 100) {
+      rec.level = tripleLevel;
+    }
+  }
+
+  // Backfill troop type again if name was cleaned after initial pass
+  if (!rec.troop_type && rec.hero_name) {
+    const heroNorm = normalizeHeroName(rec.hero_name);
+    for (const meta of Object.values(HERO_LIBRARY)) {
+      if (normalizeHeroName(meta.canonical_name) === heroNorm) {
+        rec.troop_type = meta.troop_type;
+        if (!rec.rarity) rec.rarity = meta.rarity;
+        rec.hero_name = meta.canonical_name;
+        break;
+      }
+    }
+  }
+
+  // --- Review flags ---
   if (!rec.hero_name) rec.review_flags.push("Missing hero_name");
-  if (!rec.level) rec.review_flags.push("Missing level");
+  if (rec.level == null) rec.review_flags.push("Missing level");
   if (!rec.hero_power) rec.review_flags.push("Missing hero_power");
-  if (!rec.escort_count) rec.review_flags.push("Missing escort_count");
-  if (!rec.troop_capacity) rec.review_flags.push("Missing troop_capacity");
+  if (rec.escort_count == null) rec.review_flags.push("Missing escort_count");
+  if (rec.troop_capacity == null) rec.review_flags.push("Missing troop_capacity");
   if (!rec.troop_type) rec.review_flags.push("Missing troop_type");
   if (!rec.rarity) rec.review_flags.push("Missing rarity");
 
