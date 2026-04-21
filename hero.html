@@ -53,6 +53,27 @@
   </div>
 
   <div class="card">
+    <b>Hero Record Health</b>
+    <div id="heroRecordHealth" class="status"></div>
+  </div>
+
+  <div class="card">
+    <b>Hero Review Findings</b>
+    <div id="heroReviewFindings" class="status"></div>
+  </div>
+
+  <div class="card">
+    <b>Hero Recommended Actions</b>
+    <div id="heroRecommendedActions" class="status"></div>
+  </div>
+
+  <div class="card">
+    <b>Hero Combined Record</b><br><br>
+    <div id="heroCombinedFreshness" class="status"></div>
+    <textarea id="heroCombinedRecord"></textarea>
+  </div>
+
+  <div class="card">
     <b>Upload Hero Screenshot</b><br><br>
 
     <input type="file" id="heroFile" accept="image/*"><br><br>
@@ -115,7 +136,7 @@
 
     <h3>Hero Gear Parsed Output</h3>
     <textarea id="heroGearParsed"></textarea>
-<button onclick="saveHeroGear()">Save Hero Gear</button>
+    <button onclick="saveHeroGear()">Save Hero Gear</button>
 
     <h3>Hero Gear Crop Debug</h3>
     <div id="heroGearDebug" style="display:grid;grid-template-columns:1fr 1fr;gap:8px;"></div>
@@ -160,6 +181,11 @@ let currentHeroStats = null;
 let currentHeroSkillsParsed = null;
 let currentHeroGearParsed = null;
 let pendingSkillsReview = null;
+let currentHeroPlayerId = "";
+let dirtyHeroOverview = false;
+let dirtyHeroStats = false;
+let dirtyHeroSkills = false;
+let dirtyHeroGear = false;
 
 const HERO_LIBRARY = {
   jabel: { canonical_name: "Jabel", troop_type: "cavalry", rarity: "SSR" },
@@ -223,36 +249,36 @@ function ensurePlayerRecord(db, playerId) {
       governor: null,
       heroes: {},
       summary: {
-  role_scores: {
-    bear: null,
-    castle_attack: null,
-    castle_defense: null,
-    field_attack: null,
-    field_defense: null
-  },
-  combat_profile: {
-    best_role_overall: null,
-    best_bear_role: null,
-    best_castle_role: null,
-    best_attack_role: null,
-    best_defense_role: null,
-    strongest_troop_type: null
-  },
-  strengths: [],
-  weaknesses: [],
-  top_upgrade_recommendations: [],
-  data_completeness: {
-    identity: false,
-    troops: false,
-    governor: false,
-    heroes_total: 0,
-    heroes_with_overview: 0,
-    heroes_with_stats: 0,
-    heroes_with_skills: 0,
-    heroes_with_gear: 0,
-    overall_percent: 0
-  },
-  updated_at: null
+        role_scores: {
+          bear: null,
+          castle_attack: null,
+          castle_defense: null,
+          field_attack: null,
+          field_defense: null
+        },
+        combat_profile: {
+          best_role_overall: null,
+          best_bear_role: null,
+          best_castle_role: null,
+          best_attack_role: null,
+          best_defense_role: null,
+          strongest_troop_type: null
+        },
+        strengths: [],
+        weaknesses: [],
+        top_upgrade_recommendations: [],
+        data_completeness: {
+          identity: false,
+          troops: false,
+          governor: false,
+          heroes_total: 0,
+          heroes_with_overview: 0,
+          heroes_with_stats: 0,
+          heroes_with_skills: 0,
+          heroes_with_gear: 0,
+          overall_percent: 0
+        },
+        updated_at: null
       },
       meta: {
         updated_at: null,
@@ -313,12 +339,7 @@ function updatePlayerSummaryFromRecords(playerRecord) {
   const hasTroops = !!playerRecord.troops;
   const hasGovernor = !!playerRecord.governor;
 
-  const checks = [
-    hasIdentity,
-    hasTroops,
-    hasGovernor
-  ];
-
+  const checks = [hasIdentity, hasTroops, hasGovernor];
   const heroChecks = [
     heroesWithOverview > 0,
     heroesWithStats > 0,
@@ -483,6 +504,419 @@ function thresholdCanvas(sourceCanvas, threshold = 165) {
   return canvas;
 }
 
+function buildCurrentHeroRecord() {
+  return {
+    overview: currentHeroOverview || null,
+    stats: currentHeroStats || null,
+    skills: currentHeroSkillsParsed || null,
+    gear: currentHeroGearParsed || null
+  };
+}
+
+function buildHeroReviewRecord() {
+  const current = buildCurrentHeroRecord();
+  const db = getDb();
+
+  const heroName =
+    current.overview?.hero_name ||
+    current.stats?.hero_name ||
+    current.skills?.hero_name ||
+    current.gear?.hero_name ||
+    currentHero?.overview?.hero_name ||
+    null;
+
+  if (!currentHeroPlayerId || !heroName || !db.players[currentHeroPlayerId]?.heroes?.[heroName]) {
+    return current;
+  }
+
+  const savedHero = db.players[currentHeroPlayerId].heroes[heroName];
+
+  return {
+    overview: current.overview || savedHero.overview || null,
+    stats: current.stats || savedHero.stats || null,
+    skills: current.skills || savedHero.skills || null,
+    gear: current.gear || savedHero.gear || null
+  };
+}
+
+function validateHeroRecord(heroRecord) {
+  const errors = [];
+  const warnings = [];
+
+  if (!heroRecord) {
+    return { is_valid: false, errors: ["Missing hero record"], warnings: [] };
+  }
+
+  const overview = heroRecord.overview || null;
+  const stats = heroRecord.stats || null;
+  const skills = heroRecord.skills || null;
+  const gear = heroRecord.gear || null;
+
+  if (!overview) {
+    errors.push("Missing hero overview");
+  } else {
+    if (!overview.hero_name) errors.push("Missing hero name");
+    if (!overview.troop_type) errors.push("Missing troop type");
+    if (!overview.rarity) errors.push("Missing rarity");
+    if (overview.level == null) errors.push("Missing hero level");
+  }
+
+  if (!stats) {
+    errors.push("Missing hero stats");
+  } else {
+    const conquest = stats.conquest || {};
+    const expedition = stats.expedition || {};
+    if (conquest.hero_attack == null) errors.push("Missing conquest hero attack");
+    if (conquest.hero_defense == null) errors.push("Missing conquest hero defense");
+    if (conquest.hero_health == null) errors.push("Missing conquest hero health");
+    if (conquest.escort_attack == null) errors.push("Missing conquest escort attack");
+    if (conquest.escort_defense == null) errors.push("Missing conquest escort defense");
+    if (conquest.escort_health == null) errors.push("Missing conquest escort health");
+    if (expedition.attack == null) errors.push("Missing expedition attack");
+    if (expedition.defense == null) errors.push("Missing expedition defense");
+    if (expedition.lethality == null) errors.push("Missing expedition lethality");
+    if (expedition.health == null) errors.push("Missing expedition health");
+  }
+
+  if (!skills) {
+    errors.push("Missing hero skills");
+  } else {
+    const slots = skills.slots || {};
+    const slotKeys = Object.keys(slots);
+    if (!slotKeys.length) {
+      errors.push("Missing skill slots");
+    } else {
+      for (const key of slotKeys) {
+        const slot = slots[key];
+        if (!slot) {
+          errors.push(`Missing ${key}`);
+          continue;
+        }
+        if (slot.locked === false && slot.level == null) {
+          errors.push(`Missing ${key} level`);
+        }
+        if (slot.locked === true && slot.level != null && slot.level !== 1) {
+          warnings.push(`${key} is locked but has a level`);
+        }
+      }
+    }
+  }
+
+  if (!gear) {
+    errors.push("Missing hero gear");
+  } else {
+    const gearSlots = gear.gear_slots || {};
+    const slotKeys = Object.keys(gearSlots);
+    if (!slotKeys.length) {
+      errors.push("Missing gear slots");
+    } else {
+      for (const key of slotKeys) {
+        const slot = gearSlots[key];
+        if (!slot) {
+          errors.push(`Missing gear ${key}`);
+          continue;
+        }
+
+        if (slot.exists === true && slot.locked === false && slot.equipped === true) {
+          if (key !== "center_exclusive" && slot.level == null) {
+            errors.push(`Missing gear level for ${key}`);
+          }
+        }
+
+        if (slot.exists === true && slot.locked === false && slot.equipped === true) {
+          if (slot.refine != null && slot.refine >= 0 && slot.refine < 5) {
+            warnings.push(`Low refine on ${key}`);
+          }
+        }
+
+        if (slot.locked === true && slot.equipped === true) {
+          warnings.push(`${key} is locked but marked equipped`);
+        }
+      }
+    }
+  }
+
+  if (overview?.review_flags?.length) warnings.push(...overview.review_flags);
+  if (stats?.review_flags?.length) warnings.push(...stats.review_flags);
+
+  return {
+    is_valid: [...new Set(errors)].length === 0,
+    errors: [...new Set(errors)],
+    warnings: [...new Set(warnings)]
+  };
+}
+
+function generateHeroMissingSummary(heroRecord) {
+  const missing = [];
+
+  if (!heroRecord) return ["hero_record"];
+
+  const overview = heroRecord.overview || {};
+  const stats = heroRecord.stats || {};
+  const skills = heroRecord.skills || {};
+  const gear = heroRecord.gear || {};
+
+  if (!overview.hero_name) missing.push("overview.hero_name");
+  if (!overview.troop_type) missing.push("overview.troop_type");
+  if (!overview.rarity) missing.push("overview.rarity");
+  if (overview.level == null) missing.push("overview.level");
+
+  const conquest = stats.conquest || {};
+  const expedition = stats.expedition || {};
+  if (conquest.hero_attack == null) missing.push("stats.conquest.hero_attack");
+  if (conquest.hero_defense == null) missing.push("stats.conquest.hero_defense");
+  if (conquest.hero_health == null) missing.push("stats.conquest.hero_health");
+  if (conquest.escort_attack == null) missing.push("stats.conquest.escort_attack");
+  if (conquest.escort_defense == null) missing.push("stats.conquest.escort_defense");
+  if (conquest.escort_health == null) missing.push("stats.conquest.escort_health");
+  if (expedition.attack == null) missing.push("stats.expedition.attack");
+  if (expedition.defense == null) missing.push("stats.expedition.defense");
+  if (expedition.lethality == null) missing.push("stats.expedition.lethality");
+  if (expedition.health == null) missing.push("stats.expedition.health");
+
+  const skillSlots = skills.slots || {};
+  if (!Object.keys(skillSlots).length) {
+    missing.push("skills.slots");
+  } else {
+    for (const [key, slot] of Object.entries(skillSlots)) {
+      if (!slot) {
+        missing.push(`skills.${key}`);
+        continue;
+      }
+      if (slot.locked === false && slot.level == null) {
+        missing.push(`skills.${key}.level`);
+      }
+    }
+  }
+
+  const gearSlots = gear.gear_slots || {};
+  if (!Object.keys(gearSlots).length) {
+    missing.push("gear.gear_slots");
+  } else {
+    for (const [key, slot] of Object.entries(gearSlots)) {
+      if (!slot) {
+        missing.push(`gear.${key}`);
+        continue;
+      }
+      if (
+        slot.exists === true &&
+        slot.locked === false &&
+        slot.equipped === true &&
+        key !== "center_exclusive" &&
+        slot.level == null
+      ) {
+        missing.push(`gear.${key}.level`);
+      }
+    }
+  }
+
+  return missing;
+}
+
+function getHeroSectionStatus(section, type) {
+  if (!section) return "Missing";
+
+  if (type === "overview") {
+    if (!section.hero_name || !section.troop_type || !section.rarity || section.level == null) return "Partial";
+    return "Ready";
+  }
+
+  if (type === "stats") {
+    const conquest = section.conquest || {};
+    const expedition = section.expedition || {};
+    const hasAll =
+      conquest.hero_attack != null &&
+      conquest.hero_defense != null &&
+      conquest.hero_health != null &&
+      conquest.escort_attack != null &&
+      conquest.escort_defense != null &&
+      conquest.escort_health != null &&
+      expedition.attack != null &&
+      expedition.defense != null &&
+      expedition.lethality != null &&
+      expedition.health != null;
+    return hasAll ? "Ready" : "Partial";
+  }
+
+  if (type === "skills") {
+    const slots = section.slots || {};
+    if (!Object.keys(slots).length) return "Partial";
+    for (const slot of Object.values(slots)) {
+      if (!slot) return "Partial";
+      if (slot.locked === false && slot.level == null) return "Partial";
+    }
+    return "Ready";
+  }
+
+  if (type === "gear") {
+    const gearSlots = section.gear_slots || {};
+    if (!Object.keys(gearSlots).length) return "Partial";
+    for (const [key, slot] of Object.entries(gearSlots)) {
+      if (!slot) return "Partial";
+      if (
+        slot.exists === true &&
+        slot.locked === false &&
+        slot.equipped === true &&
+        key !== "center_exclusive" &&
+        slot.level == null
+      ) return "Partial";
+    }
+    return "Ready";
+  }
+
+  return "Missing";
+}
+
+function renderHeroRecordHealth(heroRecord, validation) {
+  const overviewStatus = getHeroSectionStatus(heroRecord?.overview, "overview");
+  const statsStatus = getHeroSectionStatus(heroRecord?.stats, "stats");
+  const skillsStatus = getHeroSectionStatus(heroRecord?.skills, "skills");
+  const gearStatus = getHeroSectionStatus(heroRecord?.gear, "gear");
+
+  let overall = "Ready";
+  if (!validation.is_valid) overall = "Incomplete";
+  else if (validation.warnings.length) overall = "Needs review";
+
+  const html = `
+    <div><b>Overview:</b> ${overviewStatus}</div>
+    <div><b>Stats:</b> ${statsStatus}</div>
+    <div><b>Skills:</b> ${skillsStatus}</div>
+    <div><b>Gear:</b> ${gearStatus}</div>
+    <hr style="margin:6px 0;">
+    <div><b>Overall:</b> ${overall}</div>
+    <div><b>Errors:</b> ${validation.errors.length}</div>
+    <div><b>Warnings:</b> ${validation.warnings.length}</div>
+  `;
+
+  document.getElementById("heroRecordHealth").innerHTML = html;
+}
+
+function renderHeroReviewFindings(heroRecord, validation) {
+  const missing = generateHeroMissingSummary(heroRecord);
+  const errorSet = new Set(validation.errors || []);
+
+  const importantWarnings = (validation.warnings || []).filter(w =>
+    !errorSet.has(w) &&
+    (
+      w.toLowerCase().includes("suspicious") ||
+      w.toLowerCase().includes("locked but") ||
+      w.toLowerCase().includes("low refine")
+    )
+  );
+
+  const minorWarnings = (validation.warnings || []).filter(w =>
+    !errorSet.has(w) &&
+    !importantWarnings.includes(w)
+  );
+
+  function renderList(items, emptyText) {
+    if (!items || !items.length) return `<div>${emptyText}</div>`;
+    return `<ul style="margin:6px 0 0 18px; padding:0;">${items.map(item => `<li>${item}</li>`).join("")}</ul>`;
+  }
+
+  const html = `
+    <div><b>Errors</b></div>
+    ${renderList(validation.errors, "None")}
+
+    <div style="margin-top:10px;"><b>Warnings</b></div>
+    ${
+      importantWarnings.length
+        ? `<div style="color:#b26a00; font-weight:bold;">Needs Review</div>${renderList(importantWarnings, "")}`
+        : ""
+    }
+    ${
+      minorWarnings.length
+        ? `<div style="margin-top:6px;">Other</div>${renderList(minorWarnings, "")}`
+        : (!importantWarnings.length ? `<div>None</div>` : "")
+    }
+
+    <div style="margin-top:10px;"><b>Missing / Problem Fields</b></div>
+    ${renderList(missing, "None")}
+  `;
+
+  document.getElementById("heroReviewFindings").innerHTML = html;
+}
+
+function generateHeroRecommendations(heroRecord, validation) {
+  const recs = [];
+
+  for (const err of validation.errors || []) {
+    if (err.includes("Missing hero overview")) recs.push("Re-capture hero overview.");
+    if (err.includes("Missing hero stats")) recs.push("Re-capture hero stats screen.");
+    if (err.includes("Missing hero skills") || err.includes("Missing skill slots")) recs.push("Re-capture hero skills ring.");
+    if (err.includes("Missing hero gear") || err.includes("Missing gear slots")) recs.push("Re-capture hero gear screen.");
+    if (err.includes("Missing hero level")) recs.push("Re-capture hero overview to capture hero level.");
+    if (err.includes("Missing gear level")) recs.push("Re-capture hero gear screen to capture item levels.");
+  }
+
+  for (const warn of validation.warnings || []) {
+    if (warn.includes("locked but has a level")) recs.push("Verify locked/unlocked skill state.");
+    if (warn.includes("Low refine")) recs.push("Review gear refine values.");
+    if (warn.includes("locked but marked equipped")) recs.push("Verify gear lock/equip state.");
+  }
+
+  return [...new Set(recs)];
+}
+
+function renderHeroRecommendedActions(heroRecord, validation) {
+  const recs = generateHeroRecommendations(heroRecord, validation);
+  const html = recs.length
+    ? `<ul style="margin:6px 0 0 18px; padding:0;">${recs.map(r => `<li>${r}</li>`).join("")}</ul>`
+    : `<div>None</div>`;
+  document.getElementById("heroRecommendedActions").innerHTML = html;
+}
+
+function ageLabel(ts) {
+  if (!ts) return "missing";
+  const diff = Date.now() - new Date(ts).getTime();
+  const min = Math.floor(diff / 60000);
+  if (min < 1) return "just now";
+  if (min < 60) return `${min}m ago`;
+  const hr = Math.floor(min / 60);
+  if (hr < 24) return `${hr}h ago`;
+  const day = Math.floor(hr / 24);
+  return `${day}d ago`;
+}
+
+function renderHeroCombinedRecord() {
+  const record = buildHeroReviewRecord();
+  const heroName =
+    record.overview?.hero_name ||
+    record.stats?.hero_name ||
+    record.skills?.hero_name ||
+    record.gear?.hero_name ||
+    currentHero?.overview?.hero_name ||
+    null;
+  const db = getDb();
+  const savedHero =
+    currentHeroPlayerId && heroName && db.players[currentHeroPlayerId]?.heroes?.[heroName]
+      ? db.players[currentHeroPlayerId].heroes[heroName]
+      : null;
+
+  const overviewFresh = dirtyHeroOverview ? "unsaved parse" : ageLabel(savedHero?.overview?.saved_at);
+  const statsFresh = dirtyHeroStats ? "unsaved parse" : ageLabel(savedHero?.stats?.saved_at);
+  const skillsFresh = dirtyHeroSkills ? "unsaved parse" : ageLabel(savedHero?.skills?.saved_at);
+  const gearFresh = dirtyHeroGear ? "unsaved parse" : ageLabel(savedHero?.gear?.saved_at);
+
+  document.getElementById("heroCombinedFreshness").textContent =
+    `Overview: ${overviewFresh} | Stats: ${statsFresh} | Skills: ${skillsFresh} | Gear: ${gearFresh}`;
+
+  document.getElementById("heroCombinedRecord").value = JSON.stringify(record, null, 2);
+
+  const validation = validateHeroRecord(record);
+  renderHeroRecordHealth(record, validation);
+  renderHeroReviewFindings(record, validation);
+  renderHeroRecommendedActions(record, validation);
+}
+
+function parsedHeroKeyFromTop(heroTopText) {
+  const topNorm = normalizeHeroName(heroTopText);
+  for (const key of Object.keys(HERO_LIBRARY)) {
+    if (topNorm.includes(key)) return key;
+  }
+  return null;
+}
+
 async function readHero() {
   const file = document.getElementById("heroFile").files[0];
   if (!file) {
@@ -504,67 +938,31 @@ async function readHero() {
     const fullResult = await Tesseract.recognize(file, "eng");
     const fullText = fullResult.data.text || "";
 
-    const nameText = await ocrCanvas(
-      nameCanvas,
-      "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz "
-    );
-
-    const powerText = await ocrCanvas(
-      powerCanvas,
-      "0123456789, "
-    );
-
-    const summaryRowText = await ocrCanvas(
-      summaryRowCanvas,
-      "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789, "
-    );
-
-    const levelText = await ocrCanvas(
-      levelCanvas,
-      "0123456789 "
-    );
-
-    const rarityText = await ocrCanvas(
-      rarityCanvas,
-      "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
-    );
+    const nameText = await ocrCanvas(nameCanvas, "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz ");
+    const powerText = await ocrCanvas(powerCanvas, "0123456789, ");
+    const summaryRowText = await ocrCanvas(summaryRowCanvas, "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789, ");
+    const levelText = await ocrCanvas(levelCanvas, "0123456789 ");
+    const rarityText = await ocrCanvas(rarityCanvas, "ABCDEFGHIJKLMNOPQRSTUVWXYZ");
 
     const debugText = [
-      "--- NAME OCR ---",
-      nameText,
-      "",
-      "--- POWER OCR ---",
-      powerText,
-      "",
-      "--- SUMMARY ROW OCR ---",
-      summaryRowText,
-      "",
-      "--- LEVEL OCR ---",
-      levelText,
-      "",
-      "--- RARITY OCR ---",
-      rarityText,
-      "",
-      "--- FULL OCR ---",
-      fullText
+      "--- NAME OCR ---", nameText, "",
+      "--- POWER OCR ---", powerText, "",
+      "--- SUMMARY ROW OCR ---", summaryRowText, "",
+      "--- LEVEL OCR ---", levelText, "",
+      "--- RARITY OCR ---", rarityText, "",
+      "--- FULL OCR ---", fullText
     ].join("\n");
 
     document.getElementById("heroOCR").value = debugText;
 
     currentHeroOverview = parseHeroOverviewParts({
-      nameText,
-      powerText,
-      summaryRowText,
-      levelText,
-      rarityText,
-      fullText
+      nameText, powerText, summaryRowText, levelText, rarityText, fullText
     });
+    currentHero = { overview: currentHeroOverview };
+    dirtyHeroOverview = true;
 
-    currentHero = currentHeroOverview;
-
-    document.getElementById("heroParsed").value =
-      JSON.stringify(currentHeroOverview, null, 2);
-
+    document.getElementById("heroParsed").value = JSON.stringify(currentHeroOverview, null, 2);
+    renderHeroCombinedRecord();
     setStatus("Hero parsed.");
   } catch (err) {
     console.error(err);
@@ -587,46 +985,28 @@ async function readHeroStats() {
     const heroTopCanvas = cropCanvas(img, 0.22, 0.00, 0.56, 0.12);
     const statsPanelCanvas = cropCanvas(img, 0.28, 0.40, 0.62, 0.47);
 
-    const heroTopText = await ocrCanvas(
-      heroTopCanvas,
-      "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
-    );
-
-    const statsPanelText = await ocrCanvas(
-      statsPanelCanvas,
-      "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789,+.% "
-    );
+    const heroTopText = await ocrCanvas(heroTopCanvas, "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz");
+    const statsPanelText = await ocrCanvas(statsPanelCanvas, "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789,+.% ");
 
     const fullResult = await Tesseract.recognize(file, "eng");
     const fullText = fullResult.data.text || "";
 
     const debugText = [
-      "--- HERO TOP OCR ---",
-      heroTopText,
-      "",
-      "--- STATS PANEL OCR ---",
-      statsPanelText,
-      "",
-      "--- FULL OCR ---",
-      fullText
+      "--- HERO TOP OCR ---", heroTopText, "",
+      "--- STATS PANEL OCR ---", statsPanelText, "",
+      "--- FULL OCR ---", fullText
     ].join("\n");
 
     document.getElementById("heroStatsOCR").value = debugText;
 
-    currentHeroStats = parseHeroStatsParts({
-      heroTopText,
-      statsPanelText,
-      fullText
-    });
-
-    document.getElementById("heroStatsParsed").value =
-      JSON.stringify(currentHeroStats, null, 2);
-
+    currentHeroStats = parseHeroStatsParts({ heroTopText, statsPanelText, fullText });
+    dirtyHeroStats = true;
+    document.getElementById("heroStatsParsed").value = JSON.stringify(currentHeroStats, null, 2);
+    renderHeroCombinedRecord();
     document.getElementById("heroStatsStatus").textContent = "Hero stats parsed.";
   } catch (err) {
     console.error(err);
-    document.getElementById("heroStatsStatus").textContent =
-      "Hero stats OCR failed: " + err.message;
+    document.getElementById("heroStatsStatus").textContent = "Hero stats OCR failed: " + err.message;
   }
 }
 
@@ -645,10 +1025,7 @@ async function readHeroSkills() {
     const heroTopCanvas = cropCanvasRect(img, 0.22, 0.00, 0.78, 0.12);
     const heroTopZoom = upscaleCanvas(heroTopCanvas, 3);
 
-    const heroTopText = await ocrCanvas(
-      heroTopZoom,
-      "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
-    );
+    const heroTopText = await ocrCanvas(heroTopZoom, "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz");
 
     const regions = getSkillSlotRegions();
     const results = {};
@@ -661,10 +1038,7 @@ async function readHeroSkills() {
       const lockCrop = cropCanvas(iconCrop, 0.22, 0.18, 0.56, 0.46);
       const lockZoom = upscaleCanvas(lockCrop, 3);
 
-      const lockText = await ocrCanvas(
-        lockZoom,
-        "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
-      );
+      const lockText = await ocrCanvas(lockZoom, "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz");
 
       const lockCtx = lockZoom.getContext("2d");
       const lockData = lockCtx.getImageData(0, 0, lockZoom.width, lockZoom.height).data;
@@ -685,11 +1059,7 @@ async function readHeroSkills() {
       debugItems.push({ label: `${slot} lock`, canvas: lockZoom });
       debugItems.push({ label: `${slot} badge`, canvas: badgeZoom });
 
-      const text = await ocrCanvas(
-        badgeZoom,
-        "Lv.0123456789"
-      );
-
+      const text = await ocrCanvas(badgeZoom, "Lv.0123456789");
       const cleaned = text.replace(/\s+/g, " ").trim();
 
       const levelMatch =
@@ -705,12 +1075,7 @@ async function readHeroSkills() {
       ocrDump += `\n--- ${slot} ---\nlevelOCR: ${cleaned}\nlockOCR: ${lockText}\nlockRatio: ${lockRatio.toFixed(3)}\nlocked: ${isLocked}\n`;
     }
 
-    const parsed = {
-      hero_name: null,
-      troop_type: null,
-      rarity: null,
-      slots: results
-    };
+    const parsed = { hero_name: null, troop_type: null, rarity: null, slots: results };
 
     const topNorm = normalizeHeroName(heroTopText);
     for (const [key, meta] of Object.entries(HERO_LIBRARY)) {
@@ -723,19 +1088,18 @@ async function readHeroSkills() {
     }
 
     document.getElementById("heroSkillsOCR").value = ocrDump;
-    document.getElementById("heroSkillsParsed").value =
-      JSON.stringify(parsed, null, 2);
+    document.getElementById("heroSkillsParsed").value = JSON.stringify(parsed, null, 2);
 
     currentHeroSkillsParsed = parsed;
+    dirtyHeroSkills = true;
 
     renderSkillDebug(debugItems);
     openSkillsReview(parsed);
-
+    renderHeroCombinedRecord();
     document.getElementById("heroSkillsStatus").textContent = "Hero skills parsed. Review before saving.";
   } catch (err) {
     console.error(err);
-    document.getElementById("heroSkillsStatus").textContent =
-      "Hero skills OCR failed: " + err.message;
+    document.getElementById("heroSkillsStatus").textContent = "Hero skills OCR failed: " + err.message;
   }
 }
 
@@ -830,13 +1194,12 @@ function confirmSkillsReview() {
   }
 
   currentHeroSkillsParsed = JSON.parse(JSON.stringify(pendingSkillsReview));
+  dirtyHeroSkills = true;
 
-  document.getElementById("heroSkillsParsed").value =
-    JSON.stringify(currentHeroSkillsParsed, null, 2);
-
+  document.getElementById("heroSkillsParsed").value = JSON.stringify(currentHeroSkillsParsed, null, 2);
   document.getElementById("skillsReviewModal").style.display = "none";
-  document.getElementById("heroSkillsStatus").textContent =
-    "Hero skills reviewed. Ready to save.";
+  document.getElementById("heroSkillsStatus").textContent = "Hero skills reviewed. Ready to save.";
+  renderHeroCombinedRecord();
 }
 
 async function readHeroGear() {
@@ -853,10 +1216,7 @@ async function readHeroGear() {
 
     const heroTopCanvas = cropCanvasRect(img, 0.22, 0.00, 0.78, 0.12);
     const heroTopZoom = upscaleCanvas(heroTopCanvas, 3);
-    const heroTopText = await ocrCanvas(
-      heroTopZoom,
-      "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
-    );
+    const heroTopText = await ocrCanvas(heroTopZoom, "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz");
 
     const results = {};
     const debugItems = [];
@@ -869,154 +1229,108 @@ async function readHeroGear() {
       debugItems.push({ label: `${slot} full`, canvas: zoom });
 
       if (slot === "center_exclusive") {
-  const refineCrop = cropCanvas(crop, 0.72, 0.00, 0.28, 0.22);
-  const refineZoom = upscaleCanvas(refineCrop, 6);
+        const refineCrop = cropCanvas(crop, 0.72, 0.00, 0.28, 0.22);
+        const refineZoom = upscaleCanvas(refineCrop, 6);
 
-  debugItems.push({ label: `${slot} refine`, canvas: refineZoom });
+        debugItems.push({ label: `${slot} refine`, canvas: refineZoom });
 
-  const refineText = await ocrCanvas(
-    refineZoom,
-    "+0123456789"
-  );
+        const refineText = await ocrCanvas(refineZoom, "+0123456789");
+        const refineClean = String(refineText || "").replace(/\s+/g, " ").trim();
+        const refineMatch = refineClean.match(/\+(\d+)/) || refineClean.match(/(\d{1,3})/);
 
-  const refineClean = String(refineText || "").replace(/\s+/g, " ").trim();
+        let refine = refineMatch ? parseInt(refineMatch[1], 10) : null;
+        if (refine !== null && refine > 100) refine = refine % 100;
+        if (refine === 0) refine = 100;
 
-  const refineMatch =
-    refineClean.match(/\+(\d+)/) ||
-    refineClean.match(/(\d{1,3})/);
+        const heroKey = parsedHeroKeyFromTop(heroTopText);
+        const exclusiveExists = heroKey ? !!HERO_EXCLUSIVE_EXISTS[heroKey] : true;
 
-  let refine = refineMatch ? parseInt(refineMatch[1], 10) : null;
-  if (refine !== null && refine > 100) refine = refine % 100;
-  if (refine === 0) refine = 100;
+        let exists = exclusiveExists;
+        let equipped = false;
+        let locked = false;
 
-  const heroKey = parsedHeroKeyFromTop(heroTopText);
-  const exclusiveExists = heroKey ? !!HERO_EXCLUSIVE_EXISTS[heroKey] : true;
+        if (!exists) {
+          equipped = false;
+          locked = false;
+          refine = null;
+        } else if (refine !== null) {
+          equipped = true;
+          locked = false;
+        } else {
+          equipped = false;
+          locked = true;
+        }
 
-  let exists = exclusiveExists;
-  let equipped = false;
-  let locked = false;
+        results[slot] = {
+          slot_type: GEAR_SLOT_TYPES[slot],
+          exists,
+          locked,
+          equipped,
+          rarity: exists ? "mythic" : null,
+          refine
+        };
 
-  if (!exists) {
-    equipped = false;
-    locked = false;
-    refine = null;
-  } else if (refine !== null) {
-    equipped = true;
-    locked = false;
-  } else {
-    equipped = false;
-    locked = true;
-  }
+        ocrDump += `\n--- ${slot} ---\nrefineOCR: ${refineClean}\nexists: ${exists}\nlocked: ${locked}\nequipped: ${equipped}\n`;
+      } else {
+        const refineCrop = cropCanvas(crop, 0.51, 0.03, 0.44, 0.24);
+        const levelCrop = cropCanvas(crop, 0.51, 0.72, 0.44, 0.24);
+        const levelDigitCrop = cropCanvas(levelCrop, 0.74, 0.00, 0.22, 1.00);
 
-  results[slot] = {
-    slot_type: GEAR_SLOT_TYPES[slot],
-    exists,
-    locked,
-    equipped,
-    rarity: exists ? "mythic" : null,
-    refine
-  };
+        const refineZoom = upscaleCanvas(refineCrop, 6);
+        const levelZoom = upscaleCanvas(levelCrop, 6);
+        const levelDigitZoom = upscaleCanvas(levelDigitCrop, 8);
 
-  ocrDump += `\n--- ${slot} ---\nrefineOCR: ${refineClean}\nexists: ${exists}\nlocked: ${locked}\nequipped: ${equipped}\n`;
-}
-         else {
-  const refineCrop = cropCanvas(crop, 0.51, 0.03, 0.44, 0.24);
-  const levelCrop = cropCanvas(crop, 0.51, 0.72, 0.44, 0.24);
+        debugItems.push({ label: `${slot} refine`, canvas: refineZoom });
+        debugItems.push({ label: `${slot} level`, canvas: levelZoom });
+        debugItems.push({ label: `${slot} level_digit`, canvas: levelDigitZoom });
 
-  // isolate digit only (right side of level badge)
-  const levelDigitCrop = cropCanvas(levelCrop, 0.74, 0.00, 0.22, 1.00);
+        const refineText = await ocrCanvas(refineZoom, "+0123456789");
+        const levelText = await ocrCanvas(levelZoom, "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz.0123456789");
+        const levelDigitText = await ocrCanvas(levelDigitZoom, "0123456789");
 
-  const refineZoom = upscaleCanvas(refineCrop, 6);
-  const levelZoom = upscaleCanvas(levelCrop, 6);
-  const levelDigitZoom = upscaleCanvas(levelDigitCrop, 8);
+        const refineClean = String(refineText || "").replace(/\s+/g, " ").trim();
+        const levelClean = String(levelText || "").replace(/\s+/g, " ").trim();
+        const levelDigitClean = String(levelDigitText || "").replace(/\s+/g, " ").trim();
 
-  debugItems.push({ label: `${slot} refine`, canvas: refineZoom });
-  debugItems.push({ label: `${slot} level`, canvas: levelZoom });
-  debugItems.push({ label: `${slot} level_digit`, canvas: levelDigitZoom });
+        const refineMatch = refineClean.match(/\+(\d+)/) || refineClean.match(/(\d{1,3})/);
 
-  const refineText = await ocrCanvas(
-    refineZoom,
-    "+0123456789"
-  );
+        let refine = refineMatch ? parseInt(refineMatch[1], 10) : null;
+        if (refine !== null && refine > 100) refine = refine % 100;
+        if (refine === 0) refine = 100;
 
-  const levelText = await ocrCanvas(
-    levelZoom,
-    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz.0123456789"
-  );
+        let level = null;
+        const digitOnly = levelDigitClean.replace(/[^0-9]/g, "");
 
-  const levelDigitText = await ocrCanvas(
-    levelDigitZoom,
-    "0123456789"
-  );
+        if (digitOnly.length >= 1) {
+          level = parseInt(digitOnly[digitOnly.length - 1], 10);
+        } else {
+          const levelMatch =
+            levelClean.match(/Lv\.?\s*(\d+)/i) ||
+            levelClean.match(/L[vVy]\.?\s*(\d+)/i) ||
+            levelClean.match(/L\D*(\d+)/i) ||
+            levelClean.match(/^\D*(\d)\D*$/);
 
-  const refineClean = String(refineText || "").replace(/\s+/g, " ").trim();
-  const levelClean = String(levelText || "").replace(/\s+/g, " ").trim();
-  const levelDigitClean = String(levelDigitText || "").replace(/\s+/g, " ").trim();
+          if (levelMatch) level = parseInt(levelMatch[1], 10);
+        }
 
-  const refineMatch =
-    refineClean.match(/\+(\d+)/) ||
-    refineClean.match(/(\d{1,3})/);
+        if (level === null && /Lyl/i.test(levelClean)) level = 1;
+        if (level !== null && ![1, 2].includes(level)) level = null;
 
-  let refine = refineMatch ? parseInt(refineMatch[1], 10) : null;
-  if (refine !== null && refine > 100) refine = refine % 100;
-  if (refine === 0) refine = 100;
+        results[slot] = {
+          slot_type: GEAR_SLOT_TYPES[slot],
+          exists: true,
+          locked: false,
+          equipped: true,
+          rarity: null,
+          level: level,
+          refine: refine
+        };
 
-  let level = null;
+        ocrDump += `\n--- ${slot} ---\nrefineOCR: ${refineClean}\nlevelOCR: ${levelClean}\nlevelDigitOCR: ${levelDigitClean}\n`;
+      }
+    }
 
-const digitOnly = levelDigitClean.replace(/[^0-9]/g, "");
-
-// first trust digit crop
-if (digitOnly.length >= 1) {
-  level = parseInt(digitOnly[digitOnly.length - 1], 10);
-} else {
-  const levelMatch =
-    levelClean.match(/Lv\.?\s*(\d+)/i) ||
-    levelClean.match(/L[vVy]\.?\s*(\d+)/i) ||
-    levelClean.match(/L\D*(\d+)/i) ||
-    levelClean.match(/^\D*(\d)\D*$/);
-
-  if (levelMatch) {
-    level = parseInt(levelMatch[1], 10);
-  }
-}
-
-// fallback for common OCR misread of Lv.1
-if (level === null && /Lyl/i.test(levelClean)) {
-  level = 1;
-}
-
-// final sanity clamp
-if (level !== null && ![1, 2].includes(level)) {
-  level = null;
-}
-
-// final sanity clamp for current gear screen
-if (level !== null && ![1, 2].includes(level)) {
-  level = null;
-}
-
-  results[slot] = {
-    slot_type: GEAR_SLOT_TYPES[slot],
-    exists: true,
-    locked: false,
-    equipped: true,
-    rarity: null,
-    level: level,
-    refine: refine
-  };
-
-  ocrDump += `\n--- ${slot} ---\nrefineOCR: ${refineClean}\nlevelOCR: ${levelClean}\nlevelDigitOCR: ${levelDigitClean}\n`;
-}
-}
-
-        
-
-    const parsed = {
-      hero_name: null,
-      troop_type: null,
-      rarity: null,
-      gear_slots: results
-    };
+    const parsed = { hero_name: null, troop_type: null, rarity: null, gear_slots: results };
 
     const topNorm = normalizeHeroName(heroTopText);
     for (const [key, meta] of Object.entries(HERO_LIBRARY)) {
@@ -1029,18 +1343,17 @@ if (level !== null && ![1, 2].includes(level)) {
     }
 
     currentHeroGearParsed = parsed;
+    dirtyHeroGear = true;
 
     document.getElementById("heroGearOCR").value = ocrDump;
-    document.getElementById("heroGearParsed").value =
-      JSON.stringify(parsed, null, 2);
+    document.getElementById("heroGearParsed").value = JSON.stringify(parsed, null, 2);
 
     renderDebugGrid("heroGearDebug", debugItems);
-
+    renderHeroCombinedRecord();
     document.getElementById("heroGearStatus").textContent = "Hero gear parsed.";
   } catch (err) {
     console.error(err);
-    document.getElementById("heroGearStatus").textContent =
-      "Hero gear OCR failed: " + err.message;
+    document.getElementById("heroGearStatus").textContent = "Hero gear OCR failed: " + err.message;
   }
 }
 
@@ -1069,11 +1382,7 @@ function parseHeroOverviewParts(parts) {
     review_flags: []
   };
 
-  let rawName = String(nameText || "")
-    .replace(/[^A-Za-z ]/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-
+  let rawName = String(nameText || "").replace(/[^A-Za-z ]/g, " ").replace(/\s+/g, " ").trim();
   let heroMeta = null;
 
   if (rawName) {
@@ -1114,10 +1423,7 @@ function parseHeroOverviewParts(parts) {
     rec.hero_power = cleanInt(powerMatch[0]);
   }
 
-  const fullLines = String(fullText || "")
-    .split(/\n+/)
-    .map(s => s.trim())
-    .filter(Boolean);
+  const fullLines = String(fullText || "").split(/\n+/).map(s => s.trim()).filter(Boolean);
 
   const summaryIdx = fullLines.findIndex(line =>
     /Escorts/i.test(line) && /Level/i.test(line) && /Troops?\s*Capacity/i.test(line)
@@ -1125,9 +1431,7 @@ function parseHeroOverviewParts(parts) {
 
   if (summaryIdx >= 0 && summaryIdx + 1 < fullLines.length) {
     const nextLine = fullLines[summaryIdx + 1];
-    const nums = (nextLine.match(/\d[\d,]*/g) || [])
-      .map(cleanInt)
-      .filter(n => n > 0);
+    const nums = (nextLine.match(/\d[\d,]*/g) || []).map(cleanInt).filter(n => n > 0);
 
     const smallNums = nums.filter(n => n < 1000);
     const capNums = nums.filter(n => n >= 1000 && n < 100000);
@@ -1137,13 +1441,9 @@ function parseHeroOverviewParts(parts) {
   }
 
   if (!rec.escort_count || !rec.troop_capacity) {
-    const summaryNums = (String(summaryRowText || "").match(/\d[\d,]*/g) || [])
-      .map(cleanInt)
-      .filter(n => n > 0 && n < 100000);
-
+    const summaryNums = (String(summaryRowText || "").match(/\d[\d,]*/g) || []).map(cleanInt).filter(n => n > 0 && n < 100000);
     const smallNums = summaryNums.filter(n => n < 1000);
     const capNums = summaryNums.filter(n => n >= 1000);
-
     if (!rec.escort_count && smallNums.length) rec.escort_count = smallNums[0];
     if (!rec.troop_capacity && capNums.length) rec.troop_capacity = capNums[capNums.length - 1];
   }
@@ -1171,11 +1471,7 @@ function parseHeroOverviewParts(parts) {
 }
 
 function parseHeroStatsParts(parts) {
-  const {
-    heroTopText = "",
-    statsPanelText = "",
-    fullText = ""
-  } = parts || {};
+  const { heroTopText = "", statsPanelText = "", fullText = "" } = parts || {};
 
   const topRaw = String(heroTopText || "");
   const topLines = topRaw
@@ -1325,9 +1621,7 @@ function parseHeroStatsParts(parts) {
   if (!rec.conquest.hero_attack) rec.review_flags.push("Missing conquest stats");
   if (!rec.expedition.attack) rec.review_flags.push("Missing expedition stats");
 
-  if (rec.review_flags.length) {
-    rec.confidence.overall = 0.82;
-  }
+  if (rec.review_flags.length) rec.confidence.overall = 0.82;
 
   return rec;
 }
@@ -1366,12 +1660,16 @@ function cropCanvas(source, x, y, w, h) {
 
 async function ocrCanvas(canvas, whitelist = "") {
   const options = {};
-  if (whitelist) {
-    options.tessedit_char_whitelist = whitelist;
-  }
-
+  if (whitelist) options.tessedit_char_whitelist = whitelist;
   const result = await Tesseract.recognize(canvas, "eng", options);
   return result?.data?.text || "";
+}
+
+function promptForPlayerId(defaultValue = "") {
+  const playerId = prompt("Enter player ID:", defaultValue || currentHeroPlayerId || "");
+  if (!playerId) return "";
+  currentHeroPlayerId = playerId;
+  return playerId;
 }
 
 function saveHero() {
@@ -1381,8 +1679,7 @@ function saveHero() {
   }
 
   const db = getDb();
-  const playerId = prompt("Enter player ID to attach hero overview:");
-
+  const playerId = promptForPlayerId();
   if (!playerId) return;
 
   const playerRecord = ensurePlayerRecord(db, playerId);
@@ -1394,6 +1691,7 @@ function saveHero() {
 
   const heroRecord = ensureHeroRecord(playerRecord, currentHeroOverview.hero_name);
   heroRecord.overview = currentHeroOverview;
+  heroRecord.overview.saved_at = nowIso();
   heroRecord.meta.updated_at = nowIso();
 
   updateHeroCompleteness(heroRecord);
@@ -1401,6 +1699,8 @@ function saveHero() {
   setDb(db);
 
   currentHero = heroRecord;
+  dirtyHeroOverview = false;
+  renderHeroCombinedRecord();
 
   alert("Hero overview saved to player " + playerId);
   setStatus("Hero overview saved.");
@@ -1413,8 +1713,7 @@ function saveHeroStats() {
   }
 
   const db = getDb();
-  const playerId = prompt("Enter player ID to attach hero stats:");
-
+  const playerId = promptForPlayerId();
   if (!playerId) return;
 
   const playerRecord = ensurePlayerRecord(db, playerId);
@@ -1426,21 +1725,22 @@ function saveHeroStats() {
 
   const heroRecord = ensureHeroRecord(playerRecord, currentHeroStats.hero_name);
   heroRecord.stats = currentHeroStats;
+  heroRecord.stats.saved_at = nowIso();
   heroRecord.meta.updated_at = nowIso();
 
   updateHeroCompleteness(heroRecord);
   updatePlayerSummaryFromRecords(playerRecord);
   setDb(db);
+
+  dirtyHeroStats = false;
+  renderHeroCombinedRecord();
 
   alert("Hero stats saved to player " + playerId);
   document.getElementById("heroStatsStatus").textContent = "Hero stats saved.";
 }
 
 function saveHeroSkills() {
-  const parsed = currentHeroSkillsParsed || JSON.parse(
-    document.getElementById("heroSkillsParsed").value
-  );
-
+  const parsed = currentHeroSkillsParsed || JSON.parse(document.getElementById("heroSkillsParsed").value);
   const heroName = parsed.hero_name || currentHeroOverview?.hero_name || currentHero?.overview?.hero_name;
   if (!heroName) {
     alert("No hero selected");
@@ -1448,29 +1748,29 @@ function saveHeroSkills() {
   }
 
   const db = getDb();
-  const playerId = prompt("Enter player ID to attach hero skills:");
-
+  const playerId = promptForPlayerId();
   if (!playerId) return;
 
   const playerRecord = ensurePlayerRecord(db, playerId);
   const heroRecord = ensureHeroRecord(playerRecord, heroName);
 
   heroRecord.skills = parsed;
+  heroRecord.skills.saved_at = nowIso();
   heroRecord.meta.updated_at = nowIso();
 
   updateHeroCompleteness(heroRecord);
   updatePlayerSummaryFromRecords(playerRecord);
   setDb(db);
 
+  dirtyHeroSkills = false;
+  renderHeroCombinedRecord();
+
   alert("Hero skills saved to player " + playerId);
   document.getElementById("heroSkillsStatus").textContent = "Hero skills saved.";
 }
 
 function saveHeroGear() {
-  const parsed = currentHeroGearParsed || JSON.parse(
-    document.getElementById("heroGearParsed").value
-  );
-
+  const parsed = currentHeroGearParsed || JSON.parse(document.getElementById("heroGearParsed").value);
   const heroName = parsed.hero_name || currentHeroOverview?.hero_name || currentHero?.overview?.hero_name;
   if (!heroName) {
     alert("No hero selected");
@@ -1478,31 +1778,28 @@ function saveHeroGear() {
   }
 
   const db = getDb();
-  const playerId = prompt("Enter player ID to attach hero gear:");
-
+  const playerId = promptForPlayerId();
   if (!playerId) return;
 
   const playerRecord = ensurePlayerRecord(db, playerId);
   const heroRecord = ensureHeroRecord(playerRecord, heroName);
 
   heroRecord.gear = parsed;
+  heroRecord.gear.saved_at = nowIso();
   heroRecord.meta.updated_at = nowIso();
 
   updateHeroCompleteness(heroRecord);
   updatePlayerSummaryFromRecords(playerRecord);
   setDb(db);
 
+  dirtyHeroGear = false;
+  renderHeroCombinedRecord();
+
   alert("Hero gear saved to player " + playerId);
   document.getElementById("heroGearStatus").textContent = "Hero gear saved.";
 }
 
-function parsedHeroKeyFromTop(heroTopText) {
-  const topNorm = normalizeHeroName(heroTopText);
-  for (const key of Object.keys(HERO_LIBRARY)) {
-    if (topNorm.includes(key)) return key;
-  }
-  return null;
-}
+renderHeroCombinedRecord();
 </script>
 </body>
 </html>
