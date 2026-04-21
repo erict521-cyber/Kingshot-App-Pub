@@ -1773,69 +1773,103 @@ heroRecord.stats = currentHeroStats;
 }
 
 function saveHeroSkills() {
-  const parsed = currentHeroSkillsParsed || JSON.parse(document.getElementById("heroSkillsParsed").value);
+  try {
+    const parsed =
+      currentHeroSkillsParsed ||
+      JSON.parse(document.getElementById("heroSkillsParsed").value);
 
-  const db = getDb();
-  const playerId = promptForPlayerId();
-  if (!playerId) return;
+    if (!parsed) {
+      alert("No parsed hero skills found");
+      return;
+    }
 
-  const playerRecord = ensurePlayerRecord(db, playerId);
+    const db = getDb();
+    const playerId = promptForPlayerId();
+    if (!playerId) return;
 
-  const canonicalHeroName = resolveCanonicalHeroName(parsed);
-  if (!canonicalHeroName) {
-    alert("No hero selected");
-    return;
+    const playerRecord = ensurePlayerRecord(db, playerId);
+
+    const canonicalHeroName = resolveCanonicalHeroName(parsed);
+    if (!canonicalHeroName) {
+      alert("No hero selected");
+      return;
+    }
+
+    parsed.hero_name = canonicalHeroName;
+
+    const heroRecord = ensureHeroRecord(playerRecord, canonicalHeroName);
+    heroRecord.skills = parsed;
+    heroRecord.skills.saved_at = nowIso();
+    heroRecord.meta.updated_at = nowIso();
+
+    updateHeroCompleteness(heroRecord);
+    updatePlayerSummaryFromRecords(playerRecord);
+    setDb(db);
+
+    dirtyHeroSkills = false;
+
+    if (typeof renderHeroCombinedRecord === "function") {
+      renderHeroCombinedRecord();
+    }
+
+    alert("Hero skills saved to player " + playerId);
+    document.getElementById("heroSkillsStatus").textContent = "Hero skills saved.";
+  } catch (err) {
+    console.error("saveHeroSkills failed:", err);
+    alert("Hero skills save failed: " + err.message);
+    document.getElementById("heroSkillsStatus").textContent =
+      "Hero skills save failed: " + err.message;
   }
-
-  parsed.hero_name = canonicalHeroName;
-
-  const heroRecord = ensureHeroRecord(playerRecord, canonicalHeroName);
-  heroRecord.skills = parsed;
-  heroRecord.skills.saved_at = nowIso();
-  heroRecord.meta.updated_at = nowIso();
-
-  updateHeroCompleteness(heroRecord);
-  updatePlayerSummaryFromRecords(playerRecord);
-  setDb(db);
-
-  dirtyHeroSkills = false;
-  renderHeroCombinedRecord();
-
-  alert("Hero skills saved to player " + playerId);
-  document.getElementById("heroSkillsStatus").textContent = "Hero skills saved.";
 }
 
 function saveHeroGear() {
-  const parsed = currentHeroGearParsed || JSON.parse(document.getElementById("heroGearParsed").value);
+  try {
+    const parsed =
+      currentHeroGearParsed ||
+      JSON.parse(document.getElementById("heroGearParsed").value);
 
-  const db = getDb();
-  const playerId = promptForPlayerId();
-  if (!playerId) return;
+    if (!parsed) {
+      alert("No parsed hero gear found");
+      return;
+    }
 
-  const playerRecord = ensurePlayerRecord(db, playerId);
+    const db = getDb();
+    const playerId = promptForPlayerId();
+    if (!playerId) return;
 
-  const canonicalHeroName = resolveCanonicalHeroName(parsed);
-  if (!canonicalHeroName) {
-    alert("No hero selected");
-    return;
+    const playerRecord = ensurePlayerRecord(db, playerId);
+
+    const canonicalHeroName = resolveCanonicalHeroName(parsed);
+    if (!canonicalHeroName) {
+      alert("No hero selected");
+      return;
+    }
+
+    parsed.hero_name = canonicalHeroName;
+
+    const heroRecord = ensureHeroRecord(playerRecord, canonicalHeroName);
+    heroRecord.gear = parsed;
+    heroRecord.gear.saved_at = nowIso();
+    heroRecord.meta.updated_at = nowIso();
+
+    updateHeroCompleteness(heroRecord);
+    updatePlayerSummaryFromRecords(playerRecord);
+    setDb(db);
+
+    dirtyHeroGear = false;
+
+    if (typeof renderHeroCombinedRecord === "function") {
+      renderHeroCombinedRecord();
+    }
+
+    alert("Hero gear saved to player " + playerId);
+    document.getElementById("heroGearStatus").textContent = "Hero gear saved.";
+  } catch (err) {
+    console.error("saveHeroGear failed:", err);
+    alert("Hero gear save failed: " + err.message);
+    document.getElementById("heroGearStatus").textContent =
+      "Hero gear save failed: " + err.message;
   }
-
-  parsed.hero_name = canonicalHeroName;
-
-  const heroRecord = ensureHeroRecord(playerRecord, canonicalHeroName);
-  heroRecord.gear = parsed;
-  heroRecord.gear.saved_at = nowIso();
-  heroRecord.meta.updated_at = nowIso();
-
-  updateHeroCompleteness(heroRecord);
-  updatePlayerSummaryFromRecords(playerRecord);
-  setDb(db);
-
-  dirtyHeroGear = false;
-  renderHeroCombinedRecord();
-
-  alert("Hero gear saved to player " + playerId);
-  document.getElementById("heroGearStatus").textContent = "Hero gear saved.";
 }
 
 renderHeroCombinedRecord();
