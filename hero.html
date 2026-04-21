@@ -1774,17 +1774,23 @@ heroRecord.stats = currentHeroStats;
 
 function saveHeroSkills() {
   const parsed = currentHeroSkillsParsed || JSON.parse(document.getElementById("heroSkillsParsed").value);
-  const heroName = parsed.hero_name || currentHeroOverview?.hero_name || currentHero?.overview?.hero_name;
+
+  const db = getDb();
+  const playerId = promptForPlayerId();
+  if (!playerId) return;
+
+  const playerRecord = ensurePlayerRecord(db, playerId);
+
   const canonicalHeroName = resolveCanonicalHeroName(parsed);
-if (!canonicalHeroName) {
-  alert("No hero selected");
-  return;
-}
+  if (!canonicalHeroName) {
+    alert("No hero selected");
+    return;
+  }
 
-parsed.hero_name = canonicalHeroName;
+  parsed.hero_name = canonicalHeroName;
 
-const heroRecord = ensureHeroRecord(playerRecord, canonicalHeroName);
-heroRecord.skills = parsed;
+  const heroRecord = ensureHeroRecord(playerRecord, canonicalHeroName);
+  heroRecord.skills = parsed;
   heroRecord.skills.saved_at = nowIso();
   heroRecord.meta.updated_at = nowIso();
 
@@ -1801,16 +1807,23 @@ heroRecord.skills = parsed;
 
 function saveHeroGear() {
   const parsed = currentHeroGearParsed || JSON.parse(document.getElementById("heroGearParsed").value);
+
+  const db = getDb();
+  const playerId = promptForPlayerId();
+  if (!playerId) return;
+
+  const playerRecord = ensurePlayerRecord(db, playerId);
+
   const canonicalHeroName = resolveCanonicalHeroName(parsed);
-if (!canonicalHeroName) {
-  alert("No hero selected");
-  return;
-}
+  if (!canonicalHeroName) {
+    alert("No hero selected");
+    return;
+  }
 
-parsed.hero_name = canonicalHeroName;
+  parsed.hero_name = canonicalHeroName;
 
-const heroRecord = ensureHeroRecord(playerRecord, canonicalHeroName);
-heroRecord.gear = parsed;
+  const heroRecord = ensureHeroRecord(playerRecord, canonicalHeroName);
+  heroRecord.gear = parsed;
   heroRecord.gear.saved_at = nowIso();
   heroRecord.meta.updated_at = nowIso();
 
