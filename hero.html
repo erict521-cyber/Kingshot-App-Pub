@@ -188,13 +188,225 @@ let dirtyHeroSkills = false;
 let dirtyHeroGear = false;
 
 const HERO_LIBRARY = {
-  jabel: { canonical_name: "Jabel", troop_type: "cavalry", rarity: "SSR" },
-  saul: { canonical_name: "Saul", troop_type: "archers", rarity: "SSR" },
-  zoe: { canonical_name: "Zoe", troop_type: "infantry", rarity: "SSR" },
-  helga: { canonical_name: "Helga", troop_type: "cavalry", rarity: "SSR" },
-  forrest: { canonical_name: "Forrest", troop_type: "infantry", rarity: "SSR" },
-  amane: { canonical_name: "Amane", troop_type: "archers", rarity: "SSR" },
-  fahd: { canonical_name: "Fahd", troop_type: "cavalry", rarity: "SSR" }
+  yang: {
+    canonical_name: "Yang",
+    troop_type: "archers",
+    rarity: "SSR",
+    generation: 6,
+    guide_slug: "yang"
+  },
+  triton: {
+    canonical_name: "Triton",
+    troop_type: "infantry",
+    rarity: "SSR",
+    generation: 6,
+    guide_slug: "triton"
+  },
+  sophia: {
+    canonical_name: "Sophia",
+    troop_type: "cavalry",
+    rarity: "SSR",
+    generation: 6,
+    guide_slug: "sophia"
+  },
+  vivian: {
+    canonical_name: "Vivian",
+    troop_type: "archers",
+    rarity: "SSR",
+    generation: 5,
+    guide_slug: "vivian"
+  },
+  longfei: {
+    canonical_name: "Long Fei",
+    troop_type: "infantry",
+    rarity: "SSR",
+    generation: 5,
+    guide_slug: "long-fei"
+  },
+  thrud: {
+    canonical_name: "Thrud",
+    troop_type: "cavalry",
+    rarity: "SSR",
+    generation: 5,
+    guide_slug: "thrud"
+  },
+  rosa: {
+    canonical_name: "Rosa",
+    troop_type: "archers",
+    rarity: "SSR",
+    generation: 4,
+    guide_slug: "rosa"
+  },
+  alcar: {
+    canonical_name: "Alcar",
+    troop_type: "infantry",
+    rarity: "SSR",
+    generation: 4,
+    guide_slug: "alcar"
+  },
+  margot: {
+    canonical_name: "Margot",
+    troop_type: "cavalry",
+    rarity: "SSR",
+    generation: 4,
+    guide_slug: "margot"
+  },
+  jaeger: {
+    canonical_name: "Jaeger",
+    troop_type: "archers",
+    rarity: "SSR",
+    generation: 3,
+    guide_slug: "jaeger"
+  },
+  eric: {
+    canonical_name: "Eric",
+    troop_type: "infantry",
+    rarity: "SSR",
+    generation: 3,
+    guide_slug: "eric"
+  },
+  petra: {
+    canonical_name: "Petra",
+    troop_type: "cavalry",
+    rarity: "SSR",
+    generation: 3,
+    guide_slug: "petra"
+  },
+  hilde: {
+    canonical_name: "Hilde",
+    troop_type: "cavalry",
+    rarity: "SSR",
+    generation: 2,
+    guide_slug: "hilde"
+  },
+  zoe: {
+    canonical_name: "Zoe",
+    troop_type: "infantry",
+    rarity: "SSR",
+    generation: 2,
+    guide_slug: "zoe"
+  },
+  marlin: {
+    canonical_name: "Marlin",
+    troop_type: "archers",
+    rarity: "SSR",
+    generation: 2,
+    guide_slug: "marlin"
+  },
+  jabel: {
+    canonical_name: "Jabel",
+    troop_type: "cavalry",
+    rarity: "SSR",
+    generation: 1,
+    guide_slug: "jabel"
+  },
+  amadeus: {
+    canonical_name: "Amadeus",
+    troop_type: "infantry",
+    rarity: "SSR",
+    generation: 1,
+    guide_slug: "amadeus"
+  },
+  helga: {
+    canonical_name: "Helga",
+    troop_type: "infantry",
+    rarity: "SSR",
+    generation: 1,
+    guide_slug: "helga"
+  },
+  saul: {
+    canonical_name: "Saul",
+    troop_type: "archers",
+    rarity: "SSR",
+    generation: 1,
+    guide_slug: "saul"
+  },
+
+  amane: {
+    canonical_name: "Amane",
+    troop_type: "archers",
+    rarity: "SR",
+    generation: null,
+    guide_slug: "mikoto"
+  },
+  yeonwoo: {
+    canonical_name: "Yeonwoo",
+    troop_type: "archers",
+    rarity: "SR",
+    generation: null,
+    guide_slug: "yeonwoo"
+  },
+  fahd: {
+    canonical_name: "Fahd",
+    troop_type: "cavalry",
+    rarity: "SR",
+    generation: null,
+    guide_slug: "fahd"
+  },
+  chenko: {
+    canonical_name: "Chenko",
+    troop_type: "cavalry",
+    rarity: "SR",
+    generation: null,
+    guide_slug: "chenko"
+  },
+  gordon: {
+    canonical_name: "Gordon",
+    troop_type: "cavalry",
+    rarity: "SR",
+    generation: null,
+    guide_slug: "gordon"
+  },
+  diana: {
+    canonical_name: "Diana",
+    troop_type: "archers",
+    rarity: "SR",
+    generation: null,
+    guide_slug: "diana"
+  },
+  howard: {
+    canonical_name: "Howard",
+    troop_type: "infantry",
+    rarity: "SR",
+    generation: null,
+    guide_slug: "howard"
+  },
+  quinn: {
+    canonical_name: "Quinn",
+    troop_type: "archers",
+    rarity: "SR",
+    generation: null,
+    guide_slug: "quinn"
+  },
+
+  olive: {
+    canonical_name: "Olive",
+    troop_type: "archers",
+    rarity: "R",
+    generation: null,
+    guide_slug: "olive"
+  },
+  edwin: {
+    canonical_name: "Edwin",
+    troop_type: "cavalry",
+    rarity: "R",
+    generation: null,
+    guide_slug: "edwin"
+  },
+  seth: {
+    canonical_name: "Seth",
+    troop_type: "infantry",
+    rarity: "R",
+    generation: null,
+    guide_slug: "seth"
+  },
+  forrest: {
+    canonical_name: "Forrest",
+    troop_type: "infantry",
+    rarity: "R",
+    generation: null,
+    guide_slug: "forrest"
+  }
 };
 
 const GEAR_SLOT_REGIONS = {
@@ -343,9 +555,17 @@ function resolveCanonicalHeroName(parsedSection) {
   for (const candidate of candidates) {
     const norm = normalizeHeroName(candidate);
 
-    for (const meta of Object.values(HERO_LIBRARY)) {
+    for (const [key, meta] of Object.entries(HERO_LIBRARY)) {
       const canonicalNorm = normalizeHeroName(meta.canonical_name);
-      if (norm === canonicalNorm || norm.includes(canonicalNorm) || canonicalNorm.includes(norm)) {
+
+      if (
+        norm === key ||
+        norm.includes(key) ||
+        key.includes(norm) ||
+        norm === canonicalNorm ||
+        norm.includes(canonicalNorm) ||
+        canonicalNorm.includes(norm)
+      ) {
         return meta.canonical_name;
       }
     }
