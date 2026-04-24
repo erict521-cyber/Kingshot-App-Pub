@@ -1637,17 +1637,24 @@ function parseHeroOverviewParts(parts) {
   const rawPowerText = String(powerText || "");
 
   function cleanNameCandidate(s) {
-    return String(s || "")
-      .replace(/[^A-Za-z ]/g, " ")
-      .replace(/\s+/g, " ")
-      .trim();
-  }
+  return String(s || "")
+    .replace(/[^A-Za-z ]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
 
-  function extractCommaNumbers(s) {
-    return (String(s || "").match(/\d{1,3}(?:,\d{3})+/g) || [])
-      .map(v => cleanInt(v))
-      .filter(v => v > 0);
-  }
+function collapseSpacedCaps(text) {
+  return String(text || "")
+    .replace(/\b([A-Za-z])\s+(?=[A-Za-z]\b)/g, "$1")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function extractCommaNumbers(s) {
+  return (String(s || "").match(/\d{1,3}(?:,\d{3})+/g) || [])
+    .map(v => cleanInt(v))
+    .filter(v => v > 0);
+}
 
   function findHeroMetaFromText(...texts) {
     const joined = texts.join(" ");
@@ -1667,7 +1674,9 @@ function parseHeroOverviewParts(parts) {
   }
 
   // --- Hero name / troop type / rarity ---
-  const cleanedName = cleanNameCandidate(rawNameText);
+  const cleanedName = cleanNameCandidate(
+  collapseSpacedCaps(rawNameText)
+);
   const heroMeta = findHeroMetaFromText(cleanedName, rawFullText) || null;
 
   if (heroMeta) {
