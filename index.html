@@ -673,8 +673,17 @@ function rebuildFromCurrent() {
     }
 
     function setDb(db) {
-      localStorage.setItem(DB_KEY, JSON.stringify(db));
-    }
+  Object.values(db.players || {}).forEach(playerRecord => {
+    updatePlayerSummaryFromRecords(playerRecord);
+    generatePlayerSummary(playerRecord);
+    generateRoleScores(playerRecord);
+
+    playerRecord.meta = playerRecord.meta || {};
+    playerRecord.meta.updated_at = nowIso();
+  });
+
+  localStorage.setItem(DB_KEY, JSON.stringify(db));
+}
 
     function nowIso() {
       return new Date().toISOString();
@@ -2490,8 +2499,6 @@ warnings.push(...getGovernorValidationWarnings(record.governor));
   if (record.governor?.review_flags?.length) {
     warnings.push(...record.governor.review_flags);
   }
-
-  warnings.push(...getGovernorValidationWarnings(record.governor));
 
   const uniqueWarnings = [...new Set(warnings)];
   const uniqueErrors = [...new Set(errors)];
