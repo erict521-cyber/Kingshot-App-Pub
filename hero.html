@@ -448,13 +448,25 @@ function setDb(db) {
   Object.values(db.players || {}).forEach(playerRecord => {
     updatePlayerSummaryFromRecords(playerRecord);
 
-    if (typeof generatePlayerSummary === "function") {
-      generatePlayerSummary(playerRecord);
-    }
+    // Hero-page-safe cleanup of stale summary text
+    playerRecord.summary = playerRecord.summary || {};
+    playerRecord.summary.weaknesses = [];
+    playerRecord.summary.top_upgrade_recommendations = [];
 
-    if (typeof generateRoleScores === "function") {
-      generateRoleScores(playerRecord);
-    }
+    const heroes = Object.values(playerRecord.heroes || {});
+    heroes.forEach(hero => {
+      const o = hero.overview;
+      if (!o) return;
+
+      if (o.level == null && !(o.review_flags || []).includes("Hero not unlocked / fragment state")) {
+        playerRecord.summary.weaknesses.push(`${o.hero_name || "Hero"} missing level`);
+        playerRecord.summary.top_upgrade_recommendations.push(`Capture ${o.hero_name || "Hero"} level`);
+      }
+    });
+
+    playerRecord.summary.weaknesses = [...new Set(playerRecord.summary.weaknesses)];
+    playerRecord.summary.top_upgrade_recommendations = [...new Set(playerRecord.summary.top_upgrade_recommendations)];
+    playerRecord.summary.updated_at = nowIso();
 
     playerRecord.meta = playerRecord.meta || {};
     playerRecord.meta.updated_at = nowIso();
