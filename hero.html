@@ -1176,11 +1176,14 @@ async function readHero() {
   try {
     const img = await loadImageFromFile(file);
 
-    const nameCanvas = cropCanvas(img, 0.357901, 0.042067, 0.296705, 0.031918);
-    const powerCanvas = cropCanvas(img, 0.18, 0.46, 0.52, 0.14);
-    const summaryRowCanvas = cropCanvas(img, 0.08, 0.60, 0.78, 0.18);
-    const levelCanvas = cropCanvas(img, 0.34, 0.62, 0.22, 0.16);
-    const rarityCanvas = cropCanvas(img, 0.00, 0.08, 0.20, 0.12);
+    const rarityCanvas = cropCanvas(img, 0.028722, 0.105625, 0.212051, 0.056065);
+const powerCanvas = cropCanvas(img, 0.305721, 0.670814, 0.392461, 0.025534);
+const summaryRowCanvas = cropCanvas(img, 0.125588, 0.777239, 0.787698, 0.055109);
+const nameCanvas = cropCanvas(img, 0.311827, 0.045819, 0.379971, 0.024424);
+
+// Keep levelCanvas for compatibility, but align it with summary row.
+// The actual level is parsed from the confident 3-number row now.
+const levelCanvas = summaryRowCanvas;
 
     const fullResult = await Tesseract.recognize(file, "eng");
     const fullText = fullResult.data.text || "";
