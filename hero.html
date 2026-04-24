@@ -447,8 +447,14 @@ function getDb() {
 function setDb(db) {
   Object.values(db.players || {}).forEach(playerRecord => {
     updatePlayerSummaryFromRecords(playerRecord);
-    generatePlayerSummary(playerRecord);
-    generateRoleScores(playerRecord);
+
+    if (typeof generatePlayerSummary === "function") {
+      generatePlayerSummary(playerRecord);
+    }
+
+    if (typeof generateRoleScores === "function") {
+      generateRoleScores(playerRecord);
+    }
 
     playerRecord.meta = playerRecord.meta || {};
     playerRecord.meta.updated_at = nowIso();
