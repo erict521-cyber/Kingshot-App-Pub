@@ -1656,6 +1656,12 @@ function extractCommaNumbers(s) {
     .filter(v => v > 0);
 }
 
+function extractLargePlainNumbers(s) {
+  return (String(s || "").match(/\b\d{6,9}\b/g) || [])
+    .map(v => cleanInt(v))
+    .filter(v => v >= 100000);
+}
+
   function findHeroMetaFromText(...texts) {
     const joined = texts.join(" ");
     const normalizedJoined = normalizeHeroName(joined);
@@ -1696,15 +1702,25 @@ function extractCommaNumbers(s) {
 
   // --- Hero power ---
   const powerCandidates = [
-    ...extractCommaNumbers(rawFullText),
-    ...extractCommaNumbers(rawPowerText),
-    ...extractCommaNumbers(rawSummaryRowText),
-    ...extractCommaNumbers(rawLevelText)
-  ];
+  ...extractCommaNumbers(rawFullText),
+  ...extractCommaNumbers(rawPowerText),
+  ...extractCommaNumbers(rawSummaryRowText),
+  ...extractCommaNumbers(rawLevelText),
 
-  if (powerCandidates.length) {
-    rec.hero_power = Math.max(...powerCandidates);
-  }
+  // Hero power often OCRs as plain digits: 772840 instead of 772,840
+  ...extractLargePlainNumbers(rawPowerText),
+  ...extractLargePlainNumbers(rawSummaryRowText),
+  ...extractLargePlainNumbers(rawLevelText)
+];
+
+const validPowerCandidates = powerCandidates.filter(v => v >= 100000);
+
+if (validPowerCandidates.length) {
+  rec.hero_power = Math.max(...validPowerCandidates);
+} else if (powerCandidates.length) {
+  rec.review_flags.push("Implausible hero_power");
+  rec.hero_power = null;
+}
 
   // --- Escort / Level / Capacity ---
   // Only trust a confident ordered row like:
