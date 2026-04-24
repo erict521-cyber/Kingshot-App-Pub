@@ -445,6 +445,15 @@ function getDb() {
 }
 
 function setDb(db) {
+  Object.values(db.players || {}).forEach(playerRecord => {
+    updatePlayerSummaryFromRecords(playerRecord);
+    generatePlayerSummary(playerRecord);
+    generateRoleScores(playerRecord);
+
+    playerRecord.meta = playerRecord.meta || {};
+    playerRecord.meta.updated_at = nowIso();
+  });
+
   localStorage.setItem(DB_KEY, JSON.stringify(db));
 }
 
