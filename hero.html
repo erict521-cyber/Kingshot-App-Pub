@@ -73,6 +73,31 @@
     <textarea id="heroCombinedRecord"></textarea>
   </div>
 
+<div class="card">
+  <b>Hero Record Maintenance</b><br><br>
+
+  <label for="heroMaintenancePlayerId">Player ID</label>
+  <input id="heroMaintenancePlayerId" placeholder="Player ID" />
+
+  <button onclick="refreshHeroMaintenanceList()">Load Hero List</button>
+
+  <br><br>
+
+  <label for="heroMaintenanceSelect">Hero</label>
+  <select id="heroMaintenanceSelect"></select>
+
+  <div>
+    <button onclick="loadSelectedHeroForEdit()">Load Selected Hero</button>
+    <button onclick="saveEditedHeroRecord()">Save Edited Hero</button>
+    <button onclick="deleteSelectedHeroRecord()">Delete Selected Hero</button>
+  </div>
+
+  <div id="heroMaintenanceStatus" class="status"></div>
+
+  <h3>Editable Hero Record JSON</h3>
+  <textarea id="heroMaintenanceJson" placeholder="Selected hero record will appear here."></textarea>
+</div>
+
   <div class="card">
     <b>Upload Hero Screenshot</b><br><br>
 
